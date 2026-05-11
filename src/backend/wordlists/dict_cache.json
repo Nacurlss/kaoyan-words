@@ -1,0 +1,56 @@
+{
+  "test": [
+    {
+      "pos": "noun",
+      "meaning": "A challenge, trial."
+    },
+    {
+      "pos": "noun",
+      "meaning": "A cupel or cupelling hearth in which precious metals are melted for trial and refinement."
+    },
+    {
+      "pos": "verb",
+      "meaning": "To challenge."
+    },
+    {
+      "pos": "verb",
+      "meaning": "To refine (gold, silver, etc.) in a test or cupel; to subject to cupellation."
+    }
+  ],
+  "law": [
+    {
+      "pos": "noun",
+      "meaning": "The body of binding rules and regulations, customs and standards established in a community by its legislative and judicial authorities."
+    },
+    {
+      "pos": "noun",
+      "meaning": "A binding regulation or custom established in a community in this way."
+    },
+    {
+      "pos": "verb",
+      "meaning": "To work as a lawyer; to practice law."
+    },
+    {
+      "pos": "verb",
+      "meaning": "To prosecute or sue (someone), to litigate."
+    }
+  ],
+  "sophisticated": [
+    {
+      "pos": "verb",
+      "meaning": "To make less natural or innocent."
+    },
+    {
+      "pos": "verb",
+      "meaning": "To practice sophistry; change the meaning of, or be vague about in order to mislead or deceive."
+    },
+    {
+      "pos": "adjective",
+      "meaning": "Having obtained worldly experience, and lacking naiveté; cosmopolitan."
+    },
+    {
+      "pos": "adjective",
+      "meaning": "Elegant, refined."
+    }
+  ]
+}

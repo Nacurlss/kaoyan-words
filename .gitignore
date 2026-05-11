@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+
+# Build output
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data - raw (large files, keep local)
+data/raw/
+*.pdf
+*.docx
+
+# Data - processed (generated, can rebuild)
+data/processed/
+
+# Data - exports (user output)
+data/exports/
+
+# Uploads (temp)
+src/backend/uploads/
+
+# Environment
+.env
+.env.local
