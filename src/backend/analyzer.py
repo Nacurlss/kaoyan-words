@@ -21,13 +21,16 @@ except AttributeError:
 else:
     ssl._create_default_https_context = _create_unverified_https_context
 
-for resource in ['punkt_tab', 'averaged_perceptron_tagger_eng', 'wordnet']:
-    try:
-        nltk.data.find(f'taggers/{resource}' if 'tagger' in resource else
-                       f'tokenizers/{resource}' if 'punkt' in resource else
-                       f'corpora/{resource}')
-    except LookupError:
-        print(f"⚠ NLTK resource missing: {resource}. Run ./start.sh with network access to download it.")
+# def _ensure_nltk_resources():
+ #      resources = ['punkt', 'wordnet', 'averaged_perceptron_tagger', 'omw-1.4', 'punkt_tab', 'averaged_perceptron_tagger_eng']
+ #      for res in resources:
+ #          try:
+ #              # Just try to download, NLTK will skip if already exists and valid
+ #              nltk.download(res, quiet=True)
+ #          except Exception as e:
+ #              print(f"⚠ Error downloading NLTK resource {res}: {e}")
+ 
+ # _ensure_nltk_resources()
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 MOMO_PATH = ROOT / "data" / "processed" / "momo_vocab" / "momo_vocab.json"
@@ -278,7 +281,7 @@ class WordAnalyzer:
             {lemma: {lemma, variants, senses, pos_counts, pos_units,
                       sentences_by_pos, frequency}}
         """
-        all_units = set((p['year'], p['section']) for p in papers)
+        all_units = set((p['year'], p['section'], p.get('exam_type', '')) for p in papers)
         total_units = len(all_units)
 
         word_index = defaultdict(lambda: {
@@ -292,6 +295,7 @@ class WordAnalyzer:
         for paper in papers:
             year = paper['year']
             section = paper['section']
+            exam_type = paper.get('exam_type', '')
             section_label = paper.get('section_label', section)
             from src.backend.section_splitter import clean_exam_sentences
             content_sentences = clean_exam_sentences(paper.get('sentences', []))
@@ -309,10 +313,10 @@ class WordAnalyzer:
                 info['lemma'] = lemma
                 info['variants'].add(word.lower())
 
-                pair = (lemma, year, section, pos)
+                pair = (lemma, year, section, exam_type, pos)
                 if pair not in seen_pairs:
                     seen_pairs.add(pair)
-                    info['pos_units'][pos].add((year, section))
+                    info['pos_units'][pos].add((year, section, exam_type))
 
             # Collect sentences — split paragraphs into actual sentences
             from nltk.tokenize import sent_tokenize
@@ -337,6 +341,7 @@ class WordAnalyzer:
                                     'year': year,
                                     'section': section,
                                     'section_label': section_label,
+                                    'exam_type': exam_type,
                                     'text': sent,
                                     'word': wl,
                                 })

@@ -1,14 +1,32 @@
 import re
+import subprocess
 import docx
 import pdfplumber
 from pathlib import Path
 
 
 def parse_docx(file_path: str) -> str:
-    """Extract all text from a .docx file."""
-    doc = docx.Document(file_path)
-    paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
-    return "\n".join(paragraphs)
+    """Extract all text from a .docx/.docm file. Falls back to textutil."""
+    try:
+        doc = docx.Document(file_path)
+        paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+        text = "\n".join(paragraphs)
+        if text.strip():
+            return text
+    except Exception:
+        pass
+    return parse_doc(file_path)
+
+
+def parse_doc(file_path: str) -> str:
+    """Extract text from .doc using macOS textutil."""
+    result = subprocess.run(
+        ['textutil', '-convert', 'txt', '-stdout', str(file_path)],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"textutil failed: {result.stderr}")
+    return result.stdout
 
 
 def parse_pdf(file_path: str) -> str:
@@ -23,10 +41,12 @@ def parse_pdf(file_path: str) -> str:
 
 
 def parse_file(file_path: str) -> str:
-    """Parse a docx or pdf file and return extracted text."""
+    """Parse a doc/docx/pdf file and return extracted text."""
     ext = Path(file_path).suffix.lower()
     if ext == ".docx":
         return parse_docx(file_path)
+    elif ext == ".doc":
+        return parse_doc(file_path)
     elif ext == ".pdf":
         return parse_pdf(file_path)
     raise ValueError(f"Unsupported file format: {ext}")

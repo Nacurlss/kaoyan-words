@@ -1,4 +1,4 @@
-import type { Paper, WordListResponse, WordEntry, Settings, SenseDetailResponse } from "./types";
+import type { Paper, WordListResponse, WordEntry, Settings, SenseDetailResponse, PersonalWordsResponse, PersonalVocabUploadResult } from "./types";
 
 const API_BASE = "";
 
@@ -59,4 +59,26 @@ export async function updateSettings(settings: Partial<Settings>): Promise<Setti
 
 export function exportUrl(band: string, format: "csv" | "excel"): string {
   return `${API_BASE}/api/export/${format}?band=${band}`;
+}
+
+export async function uploadPersonalVocab(file: File): Promise<PersonalVocabUploadResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API_BASE}/api/personal_vocab/upload`, { method: "POST", body: formData });
+  return res.json();
+}
+
+export async function getPersonalWords(params: {
+  search?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<PersonalWordsResponse> {
+  const sp = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== "") sp.set(k, String(v)); });
+  const res = await fetch(`${API_BASE}/api/personal_words?${sp.toString()}`);
+  return res.json();
+}
+
+export async function clearPersonalVocab(): Promise<void> {
+  await fetch(`${API_BASE}/api/personal_vocab`, { method: "DELETE" });
 }

@@ -66,7 +66,7 @@ export default function WordDetailModal({ word, onClose }: Props) {
                   const idx = s.text.toLowerCase().indexOf(s.word.toLowerCase());
                   return (
                     <div key={i} className="sentence-item">
-                      <div className="paper-label">{s.year} · {s.section_label}</div>
+                      <div className="paper-label">{s.exam_type ? `${s.exam_type} · ` : ""}{s.year} · {s.section_label}</div>
                       {idx >= 0 ? (
                         <>
                           {s.text.slice(0, idx)}

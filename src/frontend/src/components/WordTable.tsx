@@ -58,9 +58,10 @@ function SenseDetailPopover({ lemma, pos, onClose }: { lemma: string; pos: strin
           ) : (
             detail.sentences.slice(0, 50).map((s, i) => {
               const idx = s.text.toLowerCase().indexOf(s.word.toLowerCase());
+              const typeLabel = s.exam_type ? `${s.exam_type} · ` : "";
               return (
                 <div key={i} className="sentence-item">
-                  <div className="paper-label">{s.year} · {s.section_label}</div>
+                  <div className="paper-label">{typeLabel}{s.year} · {s.section_label}</div>
                   {idx >= 0 ? (
                     <>
                       {s.text.slice(0, idx)}
@@ -143,11 +144,17 @@ export default function WordTable({ words, loading, total, page, pageSize, sortB
                   <td>
                     <div className="example-cell">
                       {w.top_example ? (
-                        <span title={`${w.top_example.year} · ${w.top_example.section_label}`}>
-                          {w.top_example.text.length > 70
-                            ? w.top_example.text.slice(0, 70) + "…"
-                            : w.top_example.text}
-                        </span>
+                        <>
+                          <div className="example-text">
+                            {w.top_example.text.length > 70
+                              ? w.top_example.text.slice(0, 70) + "…"
+                              : w.top_example.text}
+                          </div>
+                          <div className="example-source">
+                            {w.top_example.exam_type ? `${w.top_example.exam_type} · ` : ""}
+                            {w.top_example.year} · {w.top_example.section_label}
+                          </div>
+                        </>
                       ) : (
                         "—"
                       )}

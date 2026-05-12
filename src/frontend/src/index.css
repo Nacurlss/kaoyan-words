@@ -547,8 +547,142 @@ tr.word-row:hover { background: var(--primary-light); }
   font-size: 12px;
   color: var(--text-secondary);
   max-width: 320px;
+  line-height: 1.5;
+}
+
+.example-cell .example-text {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.5;
+  margin-bottom: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.example-cell .example-source {
+  font-size: 10px;
+  color: var(--primary);
+  font-weight: 500;
+}
+
+/* ── Personal Vocab Table ── */
+.word-table-container {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: auto;
+}
+
+.word-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.word-table th {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 2px solid var(--border);
   white-space: nowrap;
-  cursor: default;
+}
+
+.word-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  vertical-align: top;
+}
+
+.word-table .not-in-exam {
+  opacity: 0.55;
+}
+
+.word-table .lemma-cell {
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.word-table .lemma-cell strong {
+  font-size: 14px;
+}
+
+.word-table .freq-cell {
+  text-align: center;
+}
+
+.word-table .sense-cell {
+  max-width: 260px;
+}
+
+.word-table .example-cell {
+  max-width: 380px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.example-block {
+  padding: 6px 0;
+}
+
+.example-text {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.6;
+  margin-bottom: 4px;
+}
+
+.example-source {
+  font-size: 10px;
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.example-block.momo-example .example-source {
+  color: var(--text-secondary);
+}
+
+.senses {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sense-line {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.pos-tag {
+  font-weight: 600;
+  color: var(--primary);
+  font-size: 10px;
+  background: var(--primary-light);
+  padding: 1px 5px;
+  border-radius: 4px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.meaning {
+  color: var(--text);
+}
+
+.count-tag {
+  font-size: 10px;
+  color: var(--success);
+  font-weight: 600;
+  margin-left: 2px;
+}
+
+.loading, .empty {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-secondary);
+  font-size: 14px;
 }

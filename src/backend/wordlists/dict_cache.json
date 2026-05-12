@@ -52,5 +52,83 @@
       "pos": "adjective",
       "meaning": "Elegant, refined."
     }
+  ],
+  "government": [
+    {
+      "pos": "noun",
+      "meaning": "The body with the power to make and/or enforce laws to control a country, land area, people or organization."
+    },
+    {
+      "pos": "noun",
+      "meaning": "(grammar) The relationship between a word and its dependents."
+    }
+  ],
+  "people": [
+    {
+      "pos": "noun",
+      "meaning": "Used as plural of person; a body of human beings considered generally or collectively; a group of two or more persons."
+    },
+    {
+      "pos": "noun",
+      "meaning": "Persons forming or belonging to a particular group, such as a nation, class, ethnic group, country, family, etc."
+    },
+    {
+      "pos": "verb",
+      "meaning": "To stock with people or inhabitants; to fill as with people; to populate."
+    },
+    {
+      "pos": "verb",
+      "meaning": "To become populous or populated."
+    },
+    {
+      "pos": "noun",
+      "meaning": "An individual; usually a human being."
+    },
+    {
+      "pos": "noun",
+      "meaning": "The physical body of a being seen as distinct from the mind, character, etc."
+    }
+  ],
+  "social": [
+    {
+      "pos": "noun",
+      "meaning": "A festive gathering to foster introductions."
+    },
+    {
+      "pos": "noun",
+      "meaning": "A dance held to raise money for a couple to be married."
+    },
+    {
+      "pos": "adjective",
+      "meaning": "Being extroverted or outgoing."
+    },
+    {
+      "pos": "adjective",
+      "meaning": "Of or relating to society."
+    },
+    {
+      "pos": "noun",
+      "meaning": "Interactive forms of media that allow users to interact with and publish to each other, generally by means of the Internet."
+    },
+    {
+      "pos": "noun",
+      "meaning": "A system whereby the state either through general or specific taxation provides various benefits to help ensure the wellbeing of its citizens."
+    },
+    {
+      "pos": "noun",
+      "meaning": "Those benefits paid under such a system."
+    },
+    {
+      "pos": "noun",
+      "meaning": "A nine-digit number issued to citizens, permanent residents, and temporary (working) residents under section 205(c)(2) of the Social Security Act, codified as 42 U.S.C. § 405(c)(2). The number is issued to an individual by the Social Security Administration. Its primary purpose is to track individuals for taxation purposes. Abbreviated as SSN. In recent years the SSN has become a de facto national identification number."
+    },
+    {
+      "pos": "noun",
+      "meaning": "A corresponding number in other countries."
+    },
+    {
+      "pos": "noun",
+      "meaning": "The study of history, geography, civics, sociology, economics, and other social-science subjects, especially in primary and secondary school."
+    }
   ]
 }

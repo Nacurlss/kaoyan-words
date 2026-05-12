@@ -18,6 +18,7 @@ export interface SenseDetail {
   year: string;
   section: string;
   section_label: string;
+  exam_type?: string;
 }
 
 export interface Sense {
@@ -32,6 +33,7 @@ export interface TopExample {
   year: string;
   section: string;
   section_label: string;
+  exam_type?: string;
 }
 
 export interface WordEntry {
@@ -69,6 +71,39 @@ export interface Settings {
   exclude_levels: string[];
   exclude_groups: string[];
   use_momo_examples?: boolean;
+  personal_vocab_enabled?: boolean;
   available_groups?: string[];
   group_sizes?: Record<string, number>;
+}
+
+export interface PersonalWord {
+  lemma: string;
+  frequency: number;
+  in_exam_papers: boolean;
+  senses: Sense[];
+  exam_example: ExamExample | null;
+  momo_example: string | null;
+  pos_counts: Record<string, number>;
+}
+
+export interface ExamExample {
+  text: string;
+  year: string;
+  section_label: string;
+  exam_type?: string;
+}
+
+export interface PersonalVocabUploadResult {
+  raw_count: number;
+  unique_count: number;
+  preview: string[];
+}
+
+export interface PersonalWordsResponse {
+  words: PersonalWord[];
+  total: number;
+  page: number;
+  page_size: number;
+  vocab_size: number;
+  matched_count: number;
 }
