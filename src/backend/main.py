@@ -17,6 +17,9 @@ import io
 import re
 import csv
 import json
+
+from dotenv import load_dotenv
+load_dotenv()
 from pathlib import Path
 
 from src.backend.parser import parse_file, extract_english_sentences, extract_year_from_filename
@@ -28,6 +31,7 @@ from src.backend.analyzer import (
     classify_by_frequency,
 )
 from src.backend.dictionary import lookup_word, annotate_word_index
+from src.backend.translator import translator, _translate_task
 
 app = FastAPI(title="考研单词频率筛选 v2")
 
@@ -644,6 +648,80 @@ async def clear_personal_vocab():
     _personal_vocab_words = set()
     _session_settings["personal_vocab_enabled"] = False
     return {"cleared": True}
+
+
+# ── Translation ──
+
+@app.post("/api/translate/start")
+async def start_pre_translate():
+    """Start background pre-translation of all sentences in word_index."""
+    global _session_word_index, _translate_task
+
+    if _translate_task["running"]:
+        return {"error": "翻译任务已在运行中"}
+
+    items = translator.collect_items_to_translate(_session_word_index)
+    _translate_task.update({
+        "running": True,
+        "done": 0,
+        "total": len(items),
+        "status": "running",
+        "current": "",
+    })
+
+    def _run():
+        def progress(done, total, current):
+            _translate_task.update({
+                "done": done,
+                "total": total,
+                "current": current,
+            })
+        try:
+            translator.batch_translate(items, progress_callback=progress)
+            _translate_task["status"] = "done"
+        except Exception as e:
+            _translate_task["status"] = "error"
+            _translate_task["current"] = str(e)
+        finally:
+            _translate_task["running"] = False
+
+    import threading
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+
+    return {"started": True, "total": len(items)}
+
+
+@app.get("/api/translate/progress")
+async def get_translate_progress():
+    """Get pre-translation progress."""
+    return _translate_task
+
+
+@app.post("/api/translate/sentences")
+async def get_translations(items: list[dict]):
+    """Batch fetch translations for given (sentence, word) pairs.
+
+    Body: [{text: "The...", word: "propose", lemma: "propose"}]
+    Returns: {translations: {"text|word": {original, translation, highlight_start, highlight_end}}}
+    """
+    results = {}
+    for item in items:
+        try:
+            result = translator.translate(
+                item.get("text", ""),
+                item.get("word", item.get("lemma", "")),
+            )
+            key = f"{item.get('text', '')}|{item.get('word', item.get('lemma', ''))}"
+            results[key] = {
+                "original": result.original,
+                "translation": result.translation,
+                "highlight_start": result.highlight_start,
+                "highlight_end": result.highlight_end,
+            }
+        except Exception:
+            pass
+    return {"translations": results}
 
 
 # ── Export ──
