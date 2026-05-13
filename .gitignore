@@ -37,3 +37,4 @@ src/backend/uploads/
 .env
 .env.local
 data/processed/translations/
+api.txt
