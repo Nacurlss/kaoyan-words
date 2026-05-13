@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { getPapers, getWords, getSettings, deletePaper, uploadPapers, uploadPersonalVocab, getPersonalWords, clearPersonalVocab } from "./api";
-import type { Paper, WordEntry, Settings, PersonalWord } from "./types";
+import { getPapers, getWords, getSettings, deletePaper, uploadPapers, uploadPersonalVocab, getPersonalWords, clearPersonalVocab, startPreTranslate, getTranslateProgress } from "./api";
+import type { Paper, WordEntry, Settings, PersonalWord, TranslateProgress } from "./types";
 import PaperList from "./components/PaperList";
 import WordTable from "./components/WordTable";
 import SettingsPanel from "./components/SettingsPanel";
@@ -32,6 +32,10 @@ export default function App() {
   const [personalLoading, setPersonalLoading] = useState(false);
   const [personalSearch, setPersonalSearch] = useState("");
   const [vocabUploading, setVocabUploading] = useState(false);
+  const [translateProgress, setTranslateProgress] = useState<TranslateProgress>({
+    done: 0, total: 0, status: "idle", current: "",
+  });
+  const [preTranslating, setPreTranslating] = useState(false);
 
   const pageSize = 50;
 
@@ -134,6 +138,24 @@ export default function App() {
     fetchPersonalWords();
   };
 
+  const pollProgress = useCallback(async () => {
+    const p = await getTranslateProgress();
+    setTranslateProgress(p);
+    if (p.status === "running") {
+      setTimeout(pollProgress, 1000);
+    } else {
+      setPreTranslating(false);
+    }
+  }, []);
+
+  useEffect(() => { pollProgress(); }, []);
+
+  const handlePreTranslate = async () => {
+    setPreTranslating(true);
+    await startPreTranslate();
+    pollProgress();
+  };
+
   return (
     <div className="app-layout">
       <header className="app-header">
@@ -154,6 +176,20 @@ export default function App() {
           {personalWords.length > 0 && (
             <button className="btn btn-outline" onClick={handleVocabClear} style={{ color: "#c0392b", borderColor: "#c0392b" }}>
               清除生词本
+            </button>
+          )}
+          {translateProgress.status !== "done" && (
+            <button
+              className="btn btn-outline"
+              onClick={handlePreTranslate}
+              disabled={preTranslating}
+              style={{ borderColor: "var(--success)", color: "var(--success)" }}
+            >
+              {preTranslating
+                ? `翻译中 ${translateProgress.done}/${translateProgress.total}`
+                : translateProgress.total > 0
+                  ? `继续翻译 (${translateProgress.done}/${translateProgress.total})`
+                  : "预翻译全部句子"}
             </button>
           )}
           <a href={`${API_BASE}/api/export/excel?band=${band}`} className="btn btn-outline" target="_blank">导出 Excel</a>
