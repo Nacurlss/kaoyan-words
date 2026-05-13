@@ -35,22 +35,22 @@ class TranslationResult:
 
 TRANSLATE_PROMPT = """You are a Chinese-English translator specialized in exam papers.
 Translate the English sentence to natural Chinese.
-Also identify which Chinese character(s) correspond to the word "{target_word}".
+In the translation, wrap the Chinese word(s) that correspond to the English word "{target_word}" in «» (guillemet) markers.
 Return ONLY a JSON object (no markdown, no extra text):
-{{"translation": "...", "highlight": [start_char_index, end_char_index]}}
+{{"translation": "..."}}
 
 Sentence: {sentence}
 Target word: {target_word}"""
 
 BATCH_TRANSLATE_PROMPT = """You are a Chinese-English translator specialized in exam papers.
 Translate each English sentence below to natural Chinese.
-For each sentence, identify which Chinese character(s) correspond to the given target word.
+For each sentence, wrap the Chinese word(s) that translate the given target word in «» markers.
 Return ONLY a JSON array (no markdown, no extra text), one object per sentence in order:
-[{{"translation": "...", "highlight": [start_char_index, end_char_index]}}, ...]
+[{{"translation": "..."}}, ...]
 
 {sentences}"""
 
-BATCH_SIZE = 5
+BATCH_SIZE = 10
 
 
 class DeepSeekTranslator:
@@ -83,6 +83,15 @@ class DeepSeekTranslator:
         path = self._cache_path(key)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(asdict(result), f, ensure_ascii=False)
+
+    def _parse_markers(self, translation: str) -> tuple[str, int, int]:
+        """Extract «» markers from translation, return (clean_text, start, end)."""
+        start = translation.find("«")
+        end = translation.find("»")
+        if start >= 0 and end > start:
+            clean = translation[:start] + translation[start+1:end] + translation[end+1:]
+            return clean, start, end - 1
+        return translation, 0, 0
 
     def translate(self, sentence: str, target_word: str) -> TranslationResult:
         """Translate a single sentence, preferring cache."""
@@ -126,11 +135,12 @@ class DeepSeekTranslator:
         content = content.strip()
 
         data = json.loads(content)
+        clean, hs, he = self._parse_markers(data["translation"])
         result = TranslationResult(
             original=sentence,
-            translation=data["translation"],
-            highlight_start=data["highlight"][0],
-            highlight_end=data["highlight"][1],
+            translation=clean,
+            highlight_start=hs,
+            highlight_end=he,
         )
         self._cache_put(key, result)
         return result
@@ -170,7 +180,7 @@ class DeepSeekTranslator:
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.1,
-                "max_tokens": 1500,
+                "max_tokens": 3000,
             },
             timeout=60,
         )
@@ -190,11 +200,12 @@ class DeepSeekTranslator:
 
         results = []
         for (sentence, target_word, key), entry in zip(uncached, data):
+            clean, hs, he = self._parse_markers(entry["translation"])
             result = TranslationResult(
                 original=sentence,
-                translation=entry["translation"],
-                highlight_start=entry["highlight"][0],
-                highlight_end=entry["highlight"][1],
+                translation=clean,
+                highlight_start=hs,
+                highlight_end=he,
             )
             self._cache_put(key, result)
             results.append(result)
@@ -221,7 +232,7 @@ class DeepSeekTranslator:
         self,
         items: list[tuple[str, str]],
         progress_callback=None,
-        rate_limit: float = 0.333,
+        rate_limit: float = 0.0,
     ) -> int:
         """Batch translate with rate limiting. Groups 5 sentences per API call."""
         import time
