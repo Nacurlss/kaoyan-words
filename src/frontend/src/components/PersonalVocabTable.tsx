@@ -1,6 +1,7 @@
 import { useState } from "react";
-import type { PersonalWord, SenseDetail } from "../types";
-import { getSenseDetail } from "../api";
+import type { PersonalWord, SenseDetail, Translation } from "../types";
+import { getSenseDetail, fetchTranslations } from "../api";
+import TranslateLine from "./TranslateLine";
 
 interface Props {
   words: PersonalWord[];
@@ -15,9 +16,25 @@ interface Props {
 
 function SenseDetailPopover({ lemma, pos, onClose }: { lemma: string; pos: string; onClose: () => void }) {
   const [detail, setDetail] = useState<{ unit_count: number; sentences: SenseDetail[] } | null>(null);
+  const [translations, setTranslations] = useState<Record<string, Translation>>({});
+  const [translating, setTranslating] = useState(false);
 
   useState(() => {
     getSenseDetail(lemma, pos).then(setDetail);
+  });
+
+  useState(() => {
+    if (!detail || detail.sentences.length === 0) return;
+    setTranslating(true);
+    const items = detail.sentences.map((s) => ({
+      text: s.text,
+      word: s.word,
+      lemma: "",
+    }));
+    fetchTranslations(items).then((t) => {
+      setTranslations(t);
+      setTranslating(false);
+    });
   });
 
   if (!detail) {
@@ -49,15 +66,21 @@ function SenseDetailPopover({ lemma, pos, onClose }: { lemma: string; pos: strin
                   <div className="paper-label">
                     {typeLabel}{s.year} · {s.section_label}
                   </div>
-                  {idx >= 0 ? (
-                    <>
-                      {s.text.slice(0, idx)}
-                      <span className="highlight">{s.text.slice(idx, idx + s.word.length)}</span>
-                      {s.text.slice(idx + s.word.length)}
-                    </>
-                  ) : (
-                    s.text
-                  )}
+                  <div>
+                    {idx >= 0 ? (
+                      <>
+                        {s.text.slice(0, idx)}
+                        <span className="highlight">{s.text.slice(idx, idx + s.word.length)}</span>
+                        {s.text.slice(idx + s.word.length)}
+                      </>
+                    ) : (
+                      s.text
+                    )}
+                  </div>
+                  <TranslateLine
+                    translation={translations[`${s.text}|${s.word}`] || null}
+                    loading={translating}
+                  />
                 </div>
               );
             })

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { getWordDetail } from "../api";
-import type { WordEntry } from "../types";
+import { getWordDetail, fetchTranslations } from "../api";
+import type { WordEntry, SenseDetail, Translation } from "../types";
+import TranslateLine from "./TranslateLine";
 
 interface Props {
   word: WordEntry;
@@ -9,10 +10,27 @@ interface Props {
 
 export default function WordDetailModal({ word, onClose }: Props) {
   const [detail, setDetail] = useState<WordEntry>(word);
+  const [translations, setTranslations] = useState<Record<string, Translation>>({});
+  const [translating, setTranslating] = useState(false);
 
   useEffect(() => {
     getWordDetail(word.lemma).then(setDetail);
   }, [word.lemma]);
+
+  useEffect(() => {
+    const allSentences = Object.values(detail.sentences_by_pos || {}).flat() as SenseDetail[];
+    if (allSentences.length === 0) return;
+    setTranslating(true);
+    const items = allSentences.map((s) => ({
+      text: s.text,
+      word: s.word,
+      lemma: "",
+    }));
+    fetchTranslations(items).then((t) => {
+      setTranslations(t);
+      setTranslating(false);
+    });
+  }, [detail.sentences_by_pos]);
 
   const totalUnits = Object.values(detail.pos_counts || {}).reduce((a, b) => a + b, 0);
 
@@ -67,15 +85,21 @@ export default function WordDetailModal({ word, onClose }: Props) {
                   return (
                     <div key={i} className="sentence-item">
                       <div className="paper-label">{s.exam_type ? `${s.exam_type} · ` : ""}{s.year} · {s.section_label}</div>
-                      {idx >= 0 ? (
-                        <>
-                          {s.text.slice(0, idx)}
-                          <span className="highlight">{s.text.slice(idx, idx + s.word.length)}</span>
-                          {s.text.slice(idx + s.word.length)}
-                        </>
-                      ) : (
-                        s.text
-                      )}
+                      <div>
+                        {idx >= 0 ? (
+                          <>
+                            {s.text.slice(0, idx)}
+                            <span className="highlight">{s.text.slice(idx, idx + s.word.length)}</span>
+                            {s.text.slice(idx + s.word.length)}
+                          </>
+                        ) : (
+                          s.text
+                        )}
+                      </div>
+                      <TranslateLine
+                        translation={translations[`${s.text}|${s.word}`] || null}
+                        loading={translating}
+                      />
                     </div>
                   );
                 })}
