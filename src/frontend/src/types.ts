@@ -107,3 +107,17 @@ export interface PersonalWordsResponse {
   vocab_size: number;
   matched_count: number;
 }
+
+export interface Translation {
+  original: string;
+  translation: string;
+  highlight_start: number;
+  highlight_end: number;
+}
+
+export interface TranslateProgress {
+  done: number;
+  total: number;
+  status: "idle" | "running" | "done" | "error";
+  current: string;
+}

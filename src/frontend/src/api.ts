@@ -1,4 +1,4 @@
-import type { Paper, WordListResponse, WordEntry, Settings, SenseDetailResponse, PersonalWordsResponse, PersonalVocabUploadResult } from "./types";
+import type { Paper, WordListResponse, WordEntry, Settings, SenseDetailResponse, PersonalWordsResponse, PersonalVocabUploadResult, Translation, TranslateProgress } from "./types";
 
 const API_BASE = "";
 
@@ -81,4 +81,26 @@ export async function getPersonalWords(params: {
 
 export async function clearPersonalVocab(): Promise<void> {
   await fetch(`${API_BASE}/api/personal_vocab`, { method: "DELETE" });
+}
+
+export async function startPreTranslate(): Promise<{ started: boolean; total: number }> {
+  const res = await fetch(`${API_BASE}/api/translate/start`, { method: "POST" });
+  return res.json();
+}
+
+export async function getTranslateProgress(): Promise<TranslateProgress> {
+  const res = await fetch(`${API_BASE}/api/translate/progress`);
+  return res.json();
+}
+
+export async function fetchTranslations(
+  items: { text: string; word: string; lemma: string }[]
+): Promise<Record<string, Translation>> {
+  const res = await fetch(`${API_BASE}/api/translate/sentences`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(items),
+  });
+  const data = await res.json();
+  return data.translations || {};
 }

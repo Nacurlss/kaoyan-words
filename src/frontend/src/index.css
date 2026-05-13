@@ -686,3 +686,27 @@ tr.word-row:hover { background: var(--primary-light); }
   color: var(--text-secondary);
   font-size: 14px;
 }
+
+/* ── Translation ── */
+.translate-line {
+  font-size: 12px;
+  color: #999;
+  line-height: 1.6;
+  margin-top: 4px;
+  padding-left: 2px;
+}
+
+.translate-normal {
+  color: #999;
+}
+
+.translate-highlight {
+  color: #555;
+  font-weight: 700;
+}
+
+.translate-loading {
+  color: #bbb;
+  font-style: italic;
+  font-size: 11px;
+}
