@@ -35,7 +35,8 @@ class TranslationResult:
 
 TRANSLATE_PROMPT = """You are a Chinese-English translator specialized in exam papers.
 Translate the English sentence to natural Chinese.
-In the translation, wrap the Chinese word(s) that correspond to the English word "{target_word}" in «» (guillemet) markers.
+In your translation, wrap the Chinese word(s) that translate "{target_word}" with ** markers (like **this**).
+Only the exact translation of "{target_word}" — do NOT wrap nearby words.
 Return ONLY a JSON object (no markdown, no extra text):
 {{"translation": "..."}}
 
@@ -44,7 +45,8 @@ Target word: {target_word}"""
 
 BATCH_TRANSLATE_PROMPT = """You are a Chinese-English translator specialized in exam papers.
 Translate each English sentence below to natural Chinese.
-For each sentence, wrap the Chinese word(s) that translate the given target word in «» markers.
+For each sentence, wrap the Chinese word(s) that translate the given target word with ** markers (like **this**).
+Only the exact translation — do NOT wrap nearby words.
 Return ONLY a JSON array (no markdown, no extra text), one object per sentence in order:
 [{{"translation": "..."}}, ...]
 
@@ -85,7 +87,16 @@ class DeepSeekTranslator:
             json.dump(asdict(result), f, ensure_ascii=False)
 
     def _parse_markers(self, translation: str) -> tuple[str, int, int]:
-        """Extract «» markers from translation, return (clean_text, start, end)."""
+        """Extract ** markers from translation, return (clean_text, start, end).
+        Handles **word** and also legacy «word» markers."""
+        import re
+        m = re.search(r'\*\*(.+?)\*\*', translation)
+        if m:
+            start = m.start()
+            end = m.end() - 4  # remove **...**
+            clean = translation[:start] + m.group(1) + translation[m.end():]
+            return clean, start, end
+        # Fallback: legacy «» markers
         start = translation.find("«")
         end = translation.find("»")
         if start >= 0 and end > start:
