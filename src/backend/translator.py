@@ -87,22 +87,15 @@ class DeepSeekTranslator:
             json.dump(asdict(result), f, ensure_ascii=False)
 
     def _parse_markers(self, translation: str) -> tuple[str, int, int]:
-        """Extract ** markers from translation, return (clean_text, start, end).
-        Handles **word** and also legacy «word» markers."""
+        """Strip ALL ** markers, highlight the LAST **...** pair."""
         import re
-        m = re.search(r'\*\*(.+?)\*\*', translation)
-        if m:
-            start = m.start()
-            end = m.end() - 4  # remove **...**
-            clean = translation[:start] + m.group(1) + translation[m.end():]
-            return clean, start, end
-        # Fallback: legacy «» markers
-        start = translation.find("«")
-        end = translation.find("»")
-        if start >= 0 and end > start:
-            clean = translation[:start] + translation[start+1:end] + translation[end+1:]
-            return clean, start, end - 1
-        return translation, 0, 0
+        matches = list(re.finditer(r'\*\*(.+?)\*\*', translation))
+        if not matches:
+            return translation, 0, 0
+        last = matches[-1]
+        clean = re.sub(r'\*\*(.+?)\*\*', r'\1', translation)
+        start = last.start() - 4 * (len(matches) - 1)
+        return clean, start, start + len(last.group(1))
 
     def translate(self, sentence: str, target_word: str) -> TranslationResult:
         """Translate a single sentence, preferring cache."""
