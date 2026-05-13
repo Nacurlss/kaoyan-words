@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { PersonalWord, SenseDetail, Translation } from "../types";
 import { getSenseDetail, fetchTranslations } from "../api";
 import TranslateLine from "./TranslateLine";
@@ -23,7 +23,7 @@ function SenseDetailPopover({ lemma, pos, onClose }: { lemma: string; pos: strin
     getSenseDetail(lemma, pos).then(setDetail);
   });
 
-  useState(() => {
+  useEffect(() => {
     if (!detail || detail.sentences.length === 0) return;
     setTranslating(true);
     const items = detail.sentences.map((s) => ({
@@ -35,7 +35,7 @@ function SenseDetailPopover({ lemma, pos, onClose }: { lemma: string; pos: strin
       setTranslations(t);
       setTranslating(false);
     });
-  });
+  }, [detail]);
 
   if (!detail) {
     return (

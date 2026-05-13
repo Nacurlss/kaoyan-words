@@ -42,6 +42,16 @@ Return ONLY a JSON object (no markdown, no extra text):
 Sentence: {sentence}
 Target word: {target_word}"""
 
+BATCH_TRANSLATE_PROMPT = """You are a Chinese-English translator specialized in exam papers.
+Translate each English sentence below to natural Chinese.
+For each sentence, identify which Chinese character(s) correspond to the given target word.
+Return ONLY a JSON array (no markdown, no extra text), one object per sentence in order:
+[{{"translation": "...", "highlight": [start_char_index, end_char_index]}}, ...]
+
+{sentences}"""
+
+BATCH_SIZE = 5
+
 
 class DeepSeekTranslator:
     def __init__(self, api_key: str = ""):
@@ -125,6 +135,71 @@ class DeepSeekTranslator:
         self._cache_put(key, result)
         return result
 
+    def translate_batch(self, items: list[tuple[str, str]]) -> list[TranslationResult]:
+        """Translate multiple sentences in one API call. Uncached items only."""
+        uncached = []
+        for sentence, target_word in items:
+            key = self._cache_key(sentence, target_word)
+            cached = self._cache_get(key)
+            if cached:
+                continue
+            uncached.append((sentence, target_word, key))
+
+        if not uncached:
+            return []
+
+        if not self.api_key:
+            raise RuntimeError("DEEPSEEK_API_KEY not set in .env")
+
+        # Build prompt lines
+        lines = []
+        for i, (sentence, target_word, _key) in enumerate(uncached, 1):
+            lines.append(f'{i}. target="{target_word}": {sentence}')
+        prompt = BATCH_TRANSLATE_PROMPT.format(sentences="\n".join(lines))
+
+        resp = requests.post(
+            self.api_url,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "deepseek-chat",
+                "messages": [
+                    {"role": "system", "content": "You are a translator. Return only JSON."},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0.1,
+                "max_tokens": 1500,
+            },
+            timeout=60,
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        content = body["choices"][0]["message"]["content"].strip()
+
+        if content.startswith("```"):
+            content = content.split("\n", 1)[-1]
+            if content.endswith("```"):
+                content = content[:-3]
+        content = content.strip()
+
+        data = json.loads(content)
+        if not isinstance(data, list):
+            data = [data]
+
+        results = []
+        for (sentence, target_word, key), entry in zip(uncached, data):
+            result = TranslationResult(
+                original=sentence,
+                translation=entry["translation"],
+                highlight_start=entry["highlight"][0],
+                highlight_end=entry["highlight"][1],
+            )
+            self._cache_put(key, result)
+            results.append(result)
+        return results
+
     def collect_items_to_translate(self, word_index: dict) -> list[tuple[str, str]]:
         """Scan word_index and return all unique (sentence, target_word) pairs."""
         seen = set()
@@ -148,27 +223,28 @@ class DeepSeekTranslator:
         progress_callback=None,
         rate_limit: float = 0.333,
     ) -> int:
-        """Batch translate with rate limiting. Returns count of newly translated."""
+        """Batch translate with rate limiting. Groups 5 sentences per API call."""
         import time
 
         fresh = 0
-        for i, (sentence, target_word) in enumerate(items):
-            key = self._cache_key(sentence, target_word)
-            if self._cache_get(key):
-                if progress_callback:
-                    progress_callback(i + 1, len(items), sentence[:30])
-                continue
+        total = len(items)
 
+        for chunk_start in range(0, total, BATCH_SIZE):
+            chunk = items[chunk_start : chunk_start + BATCH_SIZE]
+            
+            # Count already-cached, call batch API for the rest
             try:
-                self.translate(sentence, target_word)
-                fresh += 1
+                results = self.translate_batch(chunk)
+                fresh += len(results)
             except Exception as e:
-                print(f"Warning: translate error [{target_word}]: {e}")
+                print(f"Warning: batch translate error at {chunk_start}: {e}")
 
+            done = min(chunk_start + BATCH_SIZE, total)
             if progress_callback:
-                progress_callback(i + 1, len(items), sentence[:30])
+                current = chunk[-1][0][:30] if chunk else ""
+                progress_callback(done, total, current)
 
-            if i < len(items) - 1:
+            if chunk_start + BATCH_SIZE < total:
                 time.sleep(rate_limit)
 
         return fresh
