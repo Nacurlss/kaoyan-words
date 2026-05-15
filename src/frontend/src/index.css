@@ -710,3 +710,26 @@ tr.word-row:hover { background: var(--primary-light); }
   font-style: italic;
   font-size: 11px;
 }
+
+.section-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 12px;
+}
+
+.section-filter-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.section-filter select {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}

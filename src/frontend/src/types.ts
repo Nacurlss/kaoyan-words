@@ -65,6 +65,8 @@ export interface SenseDetailResponse {
   sentences: SenseDetail[];
 }
 
+export type SectionFilter = "all" | "cloze" | "reading" | "translation";
+
 export interface Settings {
   high_threshold: number;
   medium_threshold: number;
@@ -74,6 +76,7 @@ export interface Settings {
   personal_vocab_enabled?: boolean;
   available_groups?: string[];
   group_sizes?: Record<string, number>;
+  section_filter?: SectionFilter;
 }
 
 export interface PersonalWord {

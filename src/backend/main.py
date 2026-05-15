@@ -62,10 +62,32 @@ _session_settings = {
     "exclude_groups": [],
     "use_momo_examples": False,  # toggle: 墨墨原版例句 vs 真题例句
     "personal_vocab_enabled": False,  # toggle: 生词本模式
+    "section_filter": "all",
 }
+
+SECTION_FILTER_MAP = {
+    "all": None,
+    "cloze": ["use_of_english"],
+    "reading": ["reading_a", "reading_b"],
+    "translation": ["reading_c"],
+}
+
+_index_cache: dict = {}
 
 # ── Personal vocab ──
 _personal_vocab_words: set[str] = set()
+
+
+def _make_cache_key() -> tuple:
+    settings = _session_settings
+    return (
+        settings.get("section_filter", "all"),
+        tuple(sorted(settings.get("exclude_levels", []))),
+        tuple(sorted(settings.get("exclude_groups", []))),
+        tuple(sorted(
+            p["filename"] for p in _session_papers if p.get("enabled", True)
+        )),
+    )
 
 
 def _load_momo_groups() -> dict[str, set[str]]:
@@ -180,12 +202,21 @@ def _get_exclude_words(levels: list[str]) -> set[str]:
 
 
 def _build_index() -> dict:
-    """Rebuild the full frequency index."""
-    global _session_papers, _session_settings
+    """Rebuild the full frequency index with section filter and cache."""
+    global _session_papers, _session_settings, _index_cache
+
+    cache_key = _make_cache_key()
+    if cache_key in _index_cache:
+        return _index_cache[cache_key]
 
     active_papers = [p for p in _session_papers if p.get('enabled', True)]
     if not active_papers:
         return {}
+
+    sf = _session_settings.get("section_filter", "all")
+    allowed = SECTION_FILTER_MAP.get(sf)
+    if allowed is not None:
+        active_papers = [p for p in active_papers if p['section'] in allowed]
 
     word_index = analyzer.build_frequency_index(active_papers)
 
@@ -203,6 +234,8 @@ def _build_index() -> dict:
         word_index = apply_basic_word_filter(word_index, exclude)
 
     word_index = annotate_word_index(word_index)
+
+    _index_cache[cache_key] = word_index
     return word_index
 
 
@@ -246,6 +279,15 @@ async def startup():
         _session_papers = disk_papers
         _session_word_index = _build_index()
         print(f"✅ 从真题整理/ 加载了 {len(disk_papers)} 个 section 单元")
+
+    import threading
+    def warmup():
+        for sf in ["all", "cloze", "reading", "translation"]:
+            _session_settings["section_filter"] = sf
+            _build_index()
+        _session_settings["section_filter"] = "all"
+        _session_word_index = _build_index()
+    threading.Thread(target=warmup, daemon=True).start()
 
 
 # ── API Routes ──
@@ -302,6 +344,7 @@ async def upload_papers(files: list[UploadFile] = File(...)):
             if tmp_path.exists():
                 os.remove(tmp_path)
 
+    _index_cache.clear()
     _session_word_index = _build_index()
     return {"uploaded": len(files), "total_units": len(_session_papers)}
 
@@ -332,6 +375,7 @@ async def delete_paper(year: str):
     """Delete all sections for a given year."""
     global _session_papers, _session_word_index
     _session_papers = [p for p in _session_papers if p["year"] != year]
+    _index_cache.clear()
     _session_word_index = _build_index()
     return {"deleted": year, "total_units": len(_session_papers)}
 
@@ -480,17 +524,14 @@ async def get_settings():
 async def update_settings(settings: dict):
     """Update settings and rebuild index."""
     global _session_settings, _session_word_index
-    rebuild = False
 
-    for key in ["high_threshold", "medium_threshold", "exclude_levels", "exclude_groups", "use_momo_examples", "personal_vocab_enabled"]:
+    for key in ["high_threshold", "medium_threshold", "exclude_levels",
+                 "exclude_groups", "use_momo_examples", "personal_vocab_enabled",
+                 "section_filter"]:
         if key in settings:
             _session_settings[key] = settings[key]
-            if key in ["exclude_levels", "exclude_groups"]:
-                rebuild = True
 
-    if rebuild:
-        _session_word_index = _build_index()
-
+    _session_word_index = _build_index()
     return _session_settings
 
 
@@ -760,10 +801,13 @@ async def export_csv(band: str = Query("all", regex="^(high|medium|low|all)$")):
         ])
 
     output.seek(0)
+    sf = _session_settings.get("section_filter", "all")
+    sf_label = {"all": "all", "cloze": "cloze", "reading": "reading",
+                "translation": "translation"}.get(sf, "all")
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=words_{band}.csv"},
+        headers={"Content-Disposition": f"attachment; filename=words_{sf_label}_{band}.csv"},
     )
 
 
@@ -836,10 +880,13 @@ async def export_excel(band: str = Query("all", regex="^(high|medium|low|all)$")
     wb.save(output)
     output.seek(0)
 
+    sf = _session_settings.get("section_filter", "all")
+    sf_label = {"all": "all", "cloze": "cloze", "reading": "reading",
+                "translation": "translation"}.get(sf, "all")
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename=words_{band}.xlsx"},
+        headers={"Content-Disposition": f"attachment; filename=words_{sf_label}_{band}.xlsx"},
     )
 
 

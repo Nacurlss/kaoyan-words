@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { getPapers, getWords, getSettings, deletePaper, uploadPapers, uploadPersonalVocab, getPersonalWords, clearPersonalVocab, startPreTranslate, getTranslateProgress } from "./api";
-import type { Paper, WordEntry, Settings, PersonalWord, TranslateProgress } from "./types";
+import { getPapers, getWords, getSettings, deletePaper, uploadPapers, uploadPersonalVocab, getPersonalWords, clearPersonalVocab, startPreTranslate, getTranslateProgress, updateSettings } from "./api";
+import type { Paper, WordEntry, Settings, PersonalWord, TranslateProgress, SectionFilter } from "./types";
 import PaperList from "./components/PaperList";
 import WordTable from "./components/WordTable";
 import SettingsPanel from "./components/SettingsPanel";
@@ -36,6 +36,26 @@ export default function App() {
     done: 0, total: 0, status: "idle", current: "",
   });
   const [preTranslating, setPreTranslating] = useState(false);
+  const [sectionFilter, setSectionFilter] = useState<SectionFilter>("all");
+
+  const handleSectionFilterChange = async (value: SectionFilter) => {
+    setLoading(true);
+    setSelectedWord(null);
+    setPage(1);
+    setPersonalPage(1);
+
+    const ns = { ...settings, section_filter: value };
+    await updateSettings(ns);
+    setSettings(await getSettings());
+
+    if (band === "personal") {
+      await fetchPersonalWords();
+    } else {
+      await fetchWords();
+    }
+
+    setLoading(false);
+  };
 
   const pageSize = 50;
 
@@ -59,6 +79,9 @@ export default function App() {
   const fetchSettings = useCallback(async () => {
     const s = await getSettings();
     setSettings(s);
+    if (s.section_filter) {
+      setSectionFilter(s.section_filter as SectionFilter);
+    }
   }, []);
 
   const fetchPersonalWords = useCallback(async () => {
@@ -220,6 +243,18 @@ export default function App() {
                     : ` (${bands[key as keyof typeof bands] ?? "..."})`}
                 </button>
               ))}
+            </div>
+            <div className="section-filter">
+              <span className="section-filter-label">题型：</span>
+              <select
+                value={sectionFilter}
+                onChange={(e) => handleSectionFilterChange(e.target.value as SectionFilter)}
+              >
+                <option value="all">全部题型</option>
+                <option value="cloze">完形填空</option>
+                <option value="reading">阅读理解 A+B</option>
+                <option value="translation">翻译题</option>
+              </select>
             </div>
             {band === "personal" ? (
               <div className="search-bar">
