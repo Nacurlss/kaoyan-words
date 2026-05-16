@@ -39,6 +39,7 @@ export default function App() {
   const [sectionFilter, setSectionFilter] = useState<SectionFilter>("all");
 
   const handleSectionFilterChange = async (value: SectionFilter) => {
+    setSectionFilter(value);
     setLoading(true);
     setSelectedWord(null);
     setPage(1);
