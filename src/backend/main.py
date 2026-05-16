@@ -151,14 +151,20 @@ def _load_papers_from_disk() -> list[dict]:
                 
             sentences = clean_exam_sentences([p.strip() for p in paragraphs if p.strip()])
 
-            papers.append({
+            paper_entry = {
                 'year': year,
                 'section': sec['key'],
                 'section_label': sec['label'],
                 'exam_type': exam_type,
-                'filename': f"{year}_{sec['key']}",  # synthetic filename
+                'filename': f"{year}_{sec['key']}",
                 'sentences': sentences,
-            })
+            }
+
+            options_path = exam_dir / sec['file'].replace('.txt', '_options.txt')
+            if options_path.exists():
+                paper_entry['option_words'] = options_path.read_text(encoding='utf-8').strip().split()
+
+            papers.append(paper_entry)
 
     return papers
 
@@ -217,6 +223,16 @@ def _build_index() -> dict:
     allowed = SECTION_FILTER_MAP.get(sf)
     if allowed is not None:
         active_papers = [p for p in active_papers if p['section'] in allowed]
+
+    if sf == "cloze":
+        merged = []
+        for p in active_papers:
+            options = p.get("option_words", [])
+            if options:
+                p = dict(p)
+                p["sentences"] = p["sentences"] + options
+            merged.append(p)
+        active_papers = merged
 
     word_index = analyzer.build_frequency_index(active_papers)
 
