@@ -17,7 +17,7 @@
 | 前端 | 5173 | `cd src/frontend && npm run dev -- --host 0.0.0.0` |
 | 一键 | — | `./start.sh` |
 
-`.env` 文件在项目根目录，包含 `DEEPSEEK_API_KEY=sk-d11be38c305042bc8da201a131fda930`
+`.env` 文件在项目根目录，包含 `DEEPSEEK_API_KEY`（不提交 git，`.gitignore` 已配置）
 
 ---
 
