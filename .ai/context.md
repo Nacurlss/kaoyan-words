@@ -21,7 +21,7 @@
 
 ---
 
-## 2. 当前状态（2026-05-12）
+## 2. 当前状态（2026-05-13）→ v0.2.1
 
 ### v0.2.0 已完成功能
 - 英语一+英语二真题集成（`exam_type` 字段区分）
@@ -31,12 +31,31 @@
 - 墨墨释义关联 + 墨墨例句开关
 - 英语一/二区分显示（`英语一 · 2024 · 阅读理解A`）
 - 各类清洗过滤（中文说明、题目、选项、子弹符号等）
+- 翻译功能（34,923 句全部翻译完成，缓存命中）
 
-### 🆕 翻译功能（正在跑）
+### 🆕 v0.2.1 新增功能
+
+#### 题型筛选切换
+- 主工具栏 "题型：" 下拉（全部 / 完形填空 / 阅读理解 A+B / 翻译题）
+- `section_filter` 字段 + `SECTION_FILTER_MAP` + `_index_cache` 四份索引缓存
+- 切换题型时自动关弹窗、刷新生词本
+- 导出文件名加题型前缀 `words_reading_high.xlsx`
+- 题型覆盖说明：`reading_b` 只有 35 套、`reading_c` 只有 37 套，频率分母按实际 section 数算
+
+#### 完形填空选项词统计
+- 从 44 个原始 DOCX/PDF 提取完形选项词 → 24 个 `_options.txt`
+- 仅在选择"完形填空"题型时选项词才注入词频统计
+- 完形填空词数：1,584 → 2,032（+448 词）
+
+#### 墨墨未覆盖词汇检索与翻译
+- 检索出 1,975 个墨墨未收录但在真题中出现的实词
+- DeepSeek 批量翻译（66 批 × 30 词，零失败）
+- 产出 `data/exports/uncovered_words_translated.json`
 
 **引擎**: DeepSeek V4 Flash API (`model: deepseek-chat`)
 **缓存**: `data/processed/translations/{hash[:2]}/{md5}.json`, key=`md5(sentence+"|"+word)`
-**成本**: 全部 34,923 句 < ¥3
+**状态**: ✅ 34,923 句全部翻译完成
+**词汇翻译缓存**: `data/processed/vocab_translations/` — 1,975 个未覆盖词汇释义
 
 **前端翻译显示**:
 ```
@@ -59,9 +78,9 @@ src/frontend/src/index.css        ← .translate-line 样式
 ```
 
 ### 正在运行
-- **后端**: 端口 8000（已启动）
-- **前端**: 端口 5173（已启动）
-- **预翻译**: 后台线程正在批量翻译 34,923 句，10句/批。查询进度：`GET /api/translate/progress`
+- **后端**: 端口 8000（需手动启动 `uvicorn src.backend.main:app --host 0.0.0.0 --port 8000 --reload`）
+- **前端**: 端口 5173（需手动启动 `cd src/frontend && npm run dev -- --host 0.0.0.0`）
+- **翻译**: 全部完成，缓存就绪
 
 ---
 
@@ -122,10 +141,13 @@ def _parse_markers(self, translation: str) -> tuple[str, int, int]:
 
 1. **翻译缓存 key**: `md5(sentence + "|" + target_word)` — 同一句同一目标词永不重复翻译
 2. **缓存目录**: `data/processed/translations/{hash[:2]}/{hash}.json` — 256分发防单目录过大
-3. **缓存被 `.gitignore`**: 不提交 GitHub
-4. **前端 key 匹配**: `${s.text}|${s.word}` — 与后端 `/api/translate/sentences` 返回一致
-5. **去重规则**: `(year, section, exam_type, pos)` 五元组在 analyzer 中
-6. **预翻译扫描范围**: `_session_word_index` — 包含所有词，含被过滤词（冗余但覆盖所有场景）
+3. **词汇翻译缓存**: `data/processed/vocab_translations/{md5}.json` — 按 batch key MD5 缓存
+4. **缓存被 `.gitignore`**: 不提交 GitHub
+5. **前端 key 匹配**: `${s.text}|${s.word}` — 与后端 `/api/translate/sentences` 返回一致
+6. **去重规则**: `(year, section, exam_type, pos)` 五元组在 analyzer 中
+7. **索引缓存**: `_index_cache` 按 `(section_filter, exclude_levels, exclude_groups, papers)` 缓存，上传/删除试卷时清空
+8. **题型筛选**: `SECTION_FILTER_MAP = {"all": None, "cloze": ["use_of_english"], "reading": ["reading_a","reading_b"], "translation": ["reading_c"]}`
+9. **选项词隔离**: 只有 `section_filter == "cloze"` 时才注入选项词，且操作 paper 副本不污染原始数据
 
 ---
 
@@ -134,11 +156,11 @@ def _parse_markers(self, translation: str) -> tuple[str, int, int]:
 | 问题 | 严重程度 | 说明 |
 |------|:---:|------|
 | 翻译高亮偶尔不准 | 低 | `_parse_markers` 取最后一个，但 DeepSeek 可能标错词 |
-| 34,923 句太多 | 中 | 大量来自已被基础词过滤的词（如 government/social），可只翻当前可见词 |
-| 预翻译速度 | 中 | ~2-5 句/秒，受限于 DeepSeek API 响应时间 |
 | PaperList 缺少 key | 低 | React warning，不影响功能 |
 | 部分句子含选项/题目残留 | 低 | 清洗已大幅改善，边缘 case 仍有 |
 | WordDetailModal 翻译请求 | 低 | 用 `useEffect([detail.sentences_by_pos])` 触发，首次可能 null |
+| 完形选项提取覆盖率 | 低 | 24/44 文件成功，老 .doc 格式未覆盖 |
+| uncovered_words 含少量人名 | 低 | `eric`, `roman` 等系统词典含常见人名 |
 
 ---
 
@@ -158,8 +180,12 @@ def _parse_markers(self, translation: str) -> tuple[str, int, int]:
 
 ```
 当前分支: main
-最新 commit: 54d9550 "fix: handle multiple ** pairs in DeepSeek response..."
-未 push: 无（所有 commit 均已 push origin/main）
+最新 commit: 2676def "feat: find, clean, and translate 1975 exam words not in momo vocab"
+未 push: 4 commits (vs origin/main c93f95b)
+  - 2f1aa45 feat: add section filter
+  - 84ef081 feat: cloze option words
+  - df8b4b9 fix: sectionFilter state
+  - 2676def feat: uncovered words translation
 ```
 
 ---

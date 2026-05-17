@@ -22,6 +22,9 @@
 | 变量 | 含义 |
 |------|------|
 | `_session_word_index` | 全局词索引 `{lemma: {sentences_by_pos: {pos: [{text, word, year, section, exam_type}]}}}` |
+| `_session_settings["section_filter"]` | 题型筛选 `"all"|"cloze"|"reading"|"translation"` |
+| `SECTION_FILTER_MAP` | 题型 → section key 映射 |
+| `_index_cache` | 索引缓存 dict，key=`(section_filter, exclude_levels, exclude_groups, papers)` |
 | `_session_settings["exclude_levels"]` | 排除的词表等级 `["primary","zhongkao","gaokao","cet4"]` |
 | `_translate_task` | 翻译进度 `{running, done, total, status, current}` |
 | `_personal_vocab_words` | 用户上传的生词 set |
@@ -40,7 +43,11 @@
 | 使用手册 | `docs/05-manual/使用手册.md` |
 | 设计文档 | `docs/02-design/` |
 | 问题清单 | `docs/04-issues/问题清单.md` |
-| 已解决问题 | `已解决问题清单.md` |
 | 翻译设计 | `docs/02-design/翻译功能设计方案-2026-05-12.md` |
 | 翻译计划 | `docs/02-design/翻译功能实现计划-2026-05-12.md` |
+| 题型筛选设计 | `docs/02-design/题型筛选功能设计方案-2026-05-13.md` |
+| 题型筛选计划 | `docs/02-design/题型筛选功能实现计划-2026-05-13.md` |
+| 完形选项设计 | `docs/02-design/完形填空选项词统计设计方案-2026-05-13.md` |
+| 未覆盖词检索 | `docs/02-design/墨墨未覆盖词汇检索翻译设计方案-2026-05-13.md` |
+| v0.2.1 开发日志 | `docs/03-devlogs/v0.2.1计划-2026-05-13.md` |
 | AI 上下文 | `.ai/context.md`（本文件同目录） |
