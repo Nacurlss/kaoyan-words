@@ -1,63 +1,210 @@
-# 项目背景速览
+# 项目继承指南 — 2026-05-12 会话状态
 
-## 项目概述
+> 新来的 AI：读完这个文件你就能接续工作了。
+> 最后一个人类消息后，这些是最新的关键内容。
 
-**考研单词频率筛选应用** — 统计 47 年（1986-2024）考研英语一真题中每个单词的出现频率，按高/中/低分级，关联墨墨背单词（6776 词条）的释义和例句。
+---
 
-## 技术栈
+## 1. 项目速览
 
-| 层 | 技术 |
-|---|------|
-| 前端 | React 19 + TypeScript + Vite |
-| 后端 | Python FastAPI |
-| 文档解析 | python-docx + pdfplumber |
-| 分词/词性 | NLTK (punkt + perceptron tagger + WordNet) |
-| 词汇基底 | 墨墨 PDF → JSON（6776 词条） |
+**考研单词频率筛选应用** — 1998-2024 考研英语一+二真题（42套, 192个 Section），统计词频，关联墨墨背单词释义，支持生词本、翻译。
 
-## 目录结构
+### 核心端口 + 启动
+
+| 服务 | 端口 | 启动方式 |
+|------|:---:|------|
+| 后端 | 8000 | `uvicorn src.backend.main:app --host 0.0.0.0 --port 8000 --reload` |
+| 前端 | 5173 | `cd src/frontend && npm run dev -- --host 0.0.0.0` |
+| 一键 | — | `./start.sh` |
+
+`.env` 文件在项目根目录，包含 `DEEPSEEK_API_KEY`（不提交 git，`.gitignore` 已配置）
+
+---
+
+## 2. 当前状态（2026-05-13）→ v0.2.1
+
+### v0.2.0 已完成功能
+- 英语一+英语二真题集成（`exam_type` 字段区分）
+- 187 项不规则词形还原
+- 生词本（上传 xlsx/txt → 自动去重 + 词形还原 + 匹配真题）
+- 释义次数可点击 → 弹出历年真题句子列表
+- 墨墨释义关联 + 墨墨例句开关
+- 英语一/二区分显示（`英语一 · 2024 · 阅读理解A`）
+- 各类清洗过滤（中文说明、题目、选项、子弹符号等）
+- 翻译功能（34,923 句全部翻译完成，缓存命中）
+
+### 🆕 v0.2.1 新增功能
+
+#### 题型筛选切换
+- 主工具栏 "题型：" 下拉（全部 / 完形填空 / 阅读理解 A+B / 翻译题）
+- `section_filter` 字段 + `SECTION_FILTER_MAP` + `_index_cache` 四份索引缓存
+- 切换题型时自动关弹窗、刷新生词本
+- 导出文件名加题型前缀 `words_reading_high.xlsx`
+- 题型覆盖说明：`reading_b` 只有 35 套、`reading_c` 只有 37 套，频率分母按实际 section 数算
+
+#### 完形填空选项词统计
+- 从 44 个原始 DOCX/PDF 提取完形选项词 → 24 个 `_options.txt`
+- 仅在选择"完形填空"题型时选项词才注入词频统计
+- 完形填空词数：1,584 → 2,032（+448 词）
+
+#### 墨墨未覆盖词汇检索与翻译
+- 检索出 1,975 个墨墨未收录但在真题中出现的实词
+- DeepSeek 批量翻译（66 批 × 30 词，零失败）
+- 产出 `data/exports/uncovered_words_translated.json`
+
+**引擎**: DeepSeek V4 Flash API (`model: deepseek-chat`)
+**缓存**: `data/processed/translations/{hash[:2]}/{md5}.json`, key=`md5(sentence+"|"+word)`
+**状态**: ✅ 34,923 句全部翻译完成
+**词汇翻译缓存**: `data/processed/vocab_translations/` — 1,975 个未覆盖词汇释义
+
+**前端翻译显示**:
+```
+原句: The government has proposed a new policy.
+      政府提出了一项新政策。    ← 灰色 #999
+      **措施**                  ← 目标词加粗加深 #555
+```
+
+**关键修改过的文件**:
+```
+src/backend/translator.py        ← DeepSeek 翻译 + 缓存
+src/frontend/src/components/TranslateLine.tsx   ← 翻译渲染组件
+src/frontend/src/components/WordTable.tsx       ← SenseDetailPopover 集成翻译
+src/frontend/src/components/PersonalVocabTable.tsx  ← 同上
+src/frontend/src/components/WordDetailModal.tsx ← 同上
+src/frontend/src/App.tsx          ← 预翻译按钮 + 进度轮询
+src/frontend/src/api.ts           ← startPreTranslate, getTranslateProgress, fetchTranslations
+src/frontend/src/types.ts         ← Translation, TranslateProgress 类型
+src/frontend/src/index.css        ← .translate-line 样式
+```
+
+### 正在运行
+- **后端**: 端口 8000（需手动启动 `uvicorn src.backend.main:app --host 0.0.0.0 --port 8000 --reload`）
+- **前端**: 端口 5173（需手动启动 `cd src/frontend && npm run dev -- --host 0.0.0.0`）
+- **翻译**: 全部完成，缓存就绪
+
+---
+
+## 3. `_parse_markers` 的演进（重要：已经历 3 轮 bug 修复！）
+
+### 最终正确方案（当前代码）:
+
+```python
+def _parse_markers(self, translation: str) -> tuple[str, int, int]:
+    """Strip ALL ** markers, highlight the LAST **...** pair."""
+    import re
+    matches = list(re.finditer(r'\*\*(.+?)\*\*', translation))
+    if not matches:
+        return translation, 0, 0
+    last = matches[-1]
+    clean = re.sub(r'\*\*(.+?)\*\*', r'\1', translation)
+    start = last.start() - 4 * (len(matches) - 1)
+    return clean, start, start + len(last.group(1))
+```
+
+**关键需求**: DeepSeek 可能在翻译中包多个 `**...**` 对（如 `**根据**成绩等因素**衡量**`），必须：
+1. 去掉所有 `**` 标记 → `clean`
+2. 高亮最后一个 `**...**` 对 → 目标词
+
+**Prompt 给 DeepSeek 用的是 `**word**` 标记法，不是 `«»` 了！**
+
+### 之前失败的方案（不要再用）:
+- ❌ `«»` — DeepSeek 有时换成 `「」`，后端不识别
+- ❌ `[start, end]` 字符索引 — DeepSeek 算不准
+- ❌ `re.search` 只取第一个 `**` 对 — 当有多个时取错
+
+---
+
+## 4. API 端点清单
+
+### 翻译 API
+| 方法 | 路径 | 功能 |
+|------|------|------|
+| POST | `/api/translate/start` | 触发后台全量预翻译 |
+| GET | `/api/translate/progress` | 返回 `{done, total, status, current}` |
+| POST | `/api/translate/sentences` | 传入 `[{text, word, lemma}]`，返回翻译字典，key=`"text\|word"` |
+
+### 核心 API
+| 方法 | 路径 | 功能 |
+|------|------|------|
+| GET | `/api/words?band=all&sort_by=frequency` | 词频列表 |
+| GET | `/api/word/{lemma}` | 单词详情 + `sentences_by_pos` |
+| GET | `/api/sense_detail?lemma=X&pos=Y` | 特定词性的句子列表 |
+| GET | `/api/settings` | 频率阈值/排除词表设置 |
+| POST | `/api/settings` | 更新设置 |
+| POST | `/api/upload_papers` | 上传试卷 |
+| POST | `/api/personal_vocab/upload` | 上传生词本 |
+| GET | `/api/personal_words` | 生词列表 |
+
+---
+
+## 5. 关键架构决策
+
+1. **翻译缓存 key**: `md5(sentence + "|" + target_word)` — 同一句同一目标词永不重复翻译
+2. **缓存目录**: `data/processed/translations/{hash[:2]}/{hash}.json` — 256分发防单目录过大
+3. **词汇翻译缓存**: `data/processed/vocab_translations/{md5}.json` — 按 batch key MD5 缓存
+4. **缓存被 `.gitignore`**: 不提交 GitHub
+5. **前端 key 匹配**: `${s.text}|${s.word}` — 与后端 `/api/translate/sentences` 返回一致
+6. **去重规则**: `(year, section, exam_type, pos)` 五元组在 analyzer 中
+7. **索引缓存**: `_index_cache` 按 `(section_filter, exclude_levels, exclude_groups, papers)` 缓存，上传/删除试卷时清空
+8. **题型筛选**: `SECTION_FILTER_MAP = {"all": None, "cloze": ["use_of_english"], "reading": ["reading_a","reading_b"], "translation": ["reading_c"]}`
+9. **选项词隔离**: 只有 `section_filter == "cloze"` 时才注入选项词，且操作 paper 副本不污染原始数据
+
+---
+
+## 6. 已知短板 + 可优化项
+
+| 问题 | 严重程度 | 说明 |
+|------|:---:|------|
+| 翻译高亮偶尔不准 | 低 | `_parse_markers` 取最后一个，但 DeepSeek 可能标错词 |
+| PaperList 缺少 key | 低 | React warning，不影响功能 |
+| 部分句子含选项/题目残留 | 低 | 清洗已大幅改善，边缘 case 仍有 |
+| WordDetailModal 翻译请求 | 低 | 用 `useEffect([detail.sentences_by_pos])` 触发，首次可能 null |
+| 完形选项提取覆盖率 | 低 | 24/44 文件成功，老 .doc 格式未覆盖 |
+| uncovered_words 含少量人名 | 低 | `eric`, `roman` 等系统词典含常见人名 |
+
+---
+
+## 7. 用户偏好记录
+
+- 不喜欢百度系产品 → 选了 DeepSeek
+- 翻译用 `**word**` 标记 → 比 `«»` 更可靠
+- 偏好逐词验证翻译效果，而不是盲跑全量
+- 文档用中文，代码用英文（无注释，约定俗成）
+- 对 UI 细节有明确要求（灰色翻译、加深对应词）
+- commit message 用 conventional commits 格式
+- 分任务执行，而不是全量自动化
+
+---
+
+## 8. Git 状态
 
 ```
-Words/
-├── .ai/                    ← AI 协作配置
-├── src/backend/            ← FastAPI 后端
-├── src/frontend/           ← React 前端
-├── scripts/                ← 工具脚本
-├── data/
-│   ├── raw/                ← 原始真题 PDF/DOCX
-│   ├── processed/          ← 处理后的数据（sections/、momo_vocab/）
-│   └── exports/            ← 导出 CSV/Excel
-├── docs/                   ← 按生命周期编号的文档
-└── tests/                  ← 测试
+当前分支: main
+最新 commit: 2676def "feat: find, clean, and translate 1975 exam words not in momo vocab"
+未 push: 4 commits (vs origin/main c93f95b)
+  - 2f1aa45 feat: add section filter
+  - 84ef081 feat: cloze option words
+  - df8b4b9 fix: sectionFilter state
+  - 2676def feat: uncovered words translation
 ```
 
-## 当前进度
+---
 
-- **v1**：核心骨架（墨墨词库提取、题型切分、POS 标注、词频统计、前端展示）
-- **v2**：导入 1986-2009 合订本、修复段落塌陷、常考例句列
-- **v3**：精修（variants 小写、释义清洗、例句切句加粗、墨墨例句开关）
-- **v4**：清洗污染（Directions/选项/粘连词）、修复 start.sh
-- **当前**：25 项功能已完成，5 项有残缺，6 项缺失
+## 9. 恢复工作流程
 
-## 关键文件
-
-| 文件 | 职责 |
-|------|------|
-| `src/backend/main.py` | API 路由、索引构建、启动加载 |
-| `src/backend/analyzer.py` | 词频统计、词形还原、POS 标注 |
-| `src/backend/section_splitter.py` | 真题题型切分 + 清洗 |
-| `src/frontend/src/App.tsx` | 前端主应用 |
-| `scripts/build_vocab.py` | 从墨墨 PDF 提取词库 |
-| `scripts/build_papers.py` | 切分真题为题型单元 |
-| `start.sh` | 一键启动 |
-
-## 启动方式
+新会话接手时，按以下顺序：
 
 ```bash
-./start.sh
-# 前端: http://localhost:5173
-# 后端: http://localhost:8000
+# 1. 确保后端运行
+curl -s http://localhost:8000/api/translate/progress  # 检查翻译进度
+
+# 2. 确保前端运行
+open http://localhost:5173/
+
+# 3. 如果翻译未跑完且需要加速
+# 改 BATCH_SIZE 为更大值（在 translator.py），或者只翻可见词
+
+# 4. 如果要新增功能
+# 先读 docs/02-design/ 下的设计文档
+# 再读 已解决问题清单.md 了解历史
 ```
-
-## 待修问题
-
-见 `docs/04-issues/bugs.md`

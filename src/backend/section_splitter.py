@@ -23,7 +23,8 @@ YEAR_RE = re.compile(r'(19|20)(\d{2})年.*(?:研究生|硕士).*(?:英语|英文
 # Translation sentence markers
 TRANS_MARKER_RE = re.compile(r'\(?(4[6-9]|50)\)?')
 # Answer-choice line: "[A] word [B] word [C] word [D] word"
-CHOICE_LINE_RE = re.compile(r'^\[?[A-E]\]?\s+.+(\[?[A-E]\]?\s+.+){2,}$')
+# Use full-width bracket variants too
+CHOICE_LINE_RE = re.compile(r'[\[［（(]?[A-EＡ-Ｅ][\]］）)、\.\s].+[\[［（(]?[A-EＡ-Ｅ][\]］）)、\.\s].+[\[［（(]?[A-EＡ-Ｅ][\]］）)、\.\s]', re.IGNORECASE)
 OPTION_BLOCK_RE = re.compile(
     r'(?:^|\s)(?:\d{1,2}[\.\)]\s*)?[\[［（(]?[A-EＡ-Ｅ][\]］）)、\.\s]',
     re.IGNORECASE,
@@ -35,26 +36,82 @@ NUMBERED_OPTION_START_RE = re.compile(
 QUESTION_START_RE = re.compile(
     r'^(?:\d{1,2}[\.\)]\s*)?('
     r'which of the following|according to (the|paragraph)|the author|'
-    r'what (can|does|is|will|would)|why (does|is|are)|how (does|is|can)|'
+    r'what (can|does|is|will|would|the|may|might|could|should|are|do|was|were|did|has|have)|'
+    r'why (does|is|are|do|would|might|can|could)|'
+    r'how (does|is|can|would|could|might|should|do)|'
     r'it can be inferred|we can infer|we can learn|the word|the phrase|'
-    r'the passage|this text|from the text|paragraph \d+'
+    r'the passage|this text|from the text|paragraph \d+|'
+    r'in the first paragraph|in the second paragraph|in the third paragraph|'
+    r'in the last paragraph|in paragraph|in the opening paragraph|'
+    r'by (saying|citing|referring|mentioning)|'
+    r'the text (suggests|indicates|shows|implies|discusses)|'
+    r'the most appropriate|the best title|the main idea|'
+    r'all of the following|judging from|in the context|'
+    r'to (which|what|whom)'
     r')\b',
     re.IGNORECASE,
 )
 QUESTION_HINT_RE = re.compile(
     r'(as mentioned in the passage|according to the passage|'
     r'can best be described|is most likely to|are most likely to|'
-    r'the author (suggests|indicates|believes|argues)|'
+    r'the author (suggests|indicates|believes|argues|intends|implies|mentions|'
+    r'attitude|feels|states|concludes|notes|discusses|claims|maintains|views)|'
     r'the passage (suggests|indicates|implies)|'
-    r'we can infer from|we can learn from)',
+    r'we can infer from|we can learn from|'
+    r'referred to as|is used to|is mentioned to|'
+    r'the underlined|refers to|'
+    r'it can be|we can|it is indicated|it is implied|'
+    r'may best be|might best be|can be concluded|can be inferred)',
     re.IGNORECASE,
 )
 INSTRUCTION_RE = re.compile(
     r'(directions|answer sheet|choose the best|mark your answer|mark your answers|'
-    r'read the following|answer the questions|write (an essay|a letter)|'
+    r'read the following|answer the questions|write (an essay|a letter|a short|a composition|your essay)|'
     r'you should write|your composition|word limit|do not sign|do not write|'
-    r'your translation|translate the following|study the following)',
+    r'your translation|translate the following|study the following|'
+    r'考生注意|注意事项|考生须知|启用前|绝密|科目代码|'
+    r'全国硕士|研究生招生|入学统一考试|'
+    r'考试时间|满分|考试结束|答题卡|'
+    r'选择题的答案|非选择题的答案|填[（(]书[）)]写|'
+    r'试卷条形码|考生编号|报考单位|'
+    r'黑色字迹|签字笔|2B铅笔|'
+    r'草稿纸|试题册|按规定交回)',
     re.IGNORECASE,
+)
+QUESTION_ONLY_LINE_RE = re.compile(
+    r'^(?:\d{1,2}[\.\)、]\s*)?'
+    r'(?:'
+    r'[A-Z][a-zA-Z].{5,80}[\?？]|'
+    r'[A-Z][a-zA-Z].{5,180}\b(because|suggests|refers to|indicates|implies|shows|discusses|'
+    r'according|main idea|best title|most appropriate|mainly about|mainly discusses|'
+    r'NOT true|is true|is mentioned|is NOT|can be|can we|intends to|aims to|'
+    r'the author|we can learn|we can infer|it can be|what can|what is|what does|'
+    r'what would|what could|what are|how does|why does|'
+    r'may best|might best|can be concluded|can be inferred|'
+    r'the following|all of|which of|the most|judging from|in the context|'
+    r'none of|according to|to which)'
+    r'.{0,80}$|'
+    r'[A-Z][a-zA-Z].{5,200}_{3,}\s*$'  # Lines ending with blanks
+    r')',
+    re.IGNORECASE,
+)
+OPTION_ONLY_LINE_RE = re.compile(
+    r'^[A-E][\.\)\s、]\s*.{3,200}$'
+)
+BULLET_LINE_RE = re.compile(
+    r'^[•·\-\*‏]\s+[A-Za-z].{5,200}$'
+)
+UNICODE_CTRL_RE = re.compile(r'[\u200b\u200e\u200f\u202a\u202b\u202c\u202d\u202e\ufeff]')
+NUMBERED_QUESTION_RE = re.compile(
+    r'^\d{1,2}[\.\)、]\s*[A-Z][a-z].{8,200}$'
+)
+CHINESE_METADATA_RE = re.compile(
+    r'^(?:绝密|启用前|全国硕士|研究生招生|'
+    r'英语[（(][一二][）)]|科目代码|'
+    r'考生注意|注意事项|考生须知|'
+    r'答题前|考试时间|满分|考试结束|'
+    r'以下信息|考生编号|报考单位|'
+    r'试卷条形码|黑色字迹|签字笔|草稿纸|试题册)',
 )
 
 
@@ -147,9 +204,18 @@ def _mark_translation_sentences(text: str) -> str:
 
 def _clean_content_paragraph(text: str) -> str | None:
     """Keep article content and drop exam instructions, questions, and options."""
+    text = UNICODE_CTRL_RE.sub('', text)
     text = re.sub(r'\s+', ' ', text).strip()
     text = text.replace('[[', '').replace(']]', '').strip()
     if not text:
+        return None
+
+    # Skip Chinese metadata
+    if CHINESE_METADATA_RE.match(text):
+        return None
+
+    # Skip pure instructions/headers
+    if INSTRUCTION_RE.search(text) and _en_ratio(text) < 0.6:
         return None
 
     text = re.sub(r'^Directions[:：]?\s*', '', text, flags=re.IGNORECASE).strip()
@@ -160,24 +226,48 @@ def _clean_content_paragraph(text: str) -> str | None:
         return None
 
     # Cloze paragraphs sometimes glue instructions + passage + all options.
-    # Keep the passage after "(10 points)" and cut options from "1. [A]...".
+    # Keep the passage after "(10 points)" or similar markers.
     if INSTRUCTION_RE.search(text):
-        m = re.search(r'\(?\s*10\s+points\s*\)?\.?\s*(.+)$', text, re.IGNORECASE)
+        m = re.search(r'\(?\[?\s*(?:10|15|20)\s+points\s*\]?\)?[\.\s]*(.+)$', text, re.IGNORECASE)
         if m and len(m.group(1).strip()) > 30:
             text = m.group(1).strip()
         else:
-            return None
+            if len(text) > 300 and _en_ratio(text) > 0.5:
+                pass
+            else:
+                return None
 
+    # Cut off numbered options at the end (e.g., "21. [A] text [B] text")
     option_suffix = NUMBERED_OPTION_START_RE.search(text)
     if option_suffix:
         text = text[:option_suffix.start()].strip()
+
+    # Cut off unnumbered [A] or ［A］ patterns in the latter half
+    unumbered_option = re.search(r'\s+[\[［（(][A-EＡ-Ｅ][\]］）)、\.\s]', text)
+    if unumbered_option and unumbered_option.start() > len(text) * 0.5:
+        text = text[:unumbered_option.start()].strip()
+
+    # Cut off question segments glued to end of article paragraphs
+    # Pattern: legitimate article text ends, then a question starts with typical patterns
+    question_cut = QUESTION_START_RE.search(text)
+    if question_cut and question_cut.start() > len(text) * 0.3:
+        text = text[:question_cut.start()].strip()
+
+    if not text:
+        return None
+
+    # If the paragraph ends with options like [A]...[B]..., cut them
+    m_choice = CHOICE_LINE_RE.search(text)
+    if m_choice and m_choice.start() > len(text) * 0.4:
+        text = text[:m_choice.start()].strip()
 
     if not text:
         return None
 
     option_count = len(OPTION_BLOCK_RE.findall(text))
-    if option_count >= 2:
-        return None
+    if option_count >= 3:
+        if len(text) < 500:
+            return None
 
     if OPTION_BLOCK_RE.match(text):
         return None
@@ -233,14 +323,45 @@ def _extract_sentences(text: str) -> list[str]:
 
     for line in lines:
         stripped = line.strip()
+        stripped = UNICODE_CTRL_RE.sub('', stripped)
 
         # Blank line → paragraph boundary
         if not stripped:
             flush()
             continue
 
-        # Skip answer-choice-only lines
+        # Skip Chinese metadata lines (exam header info)
+        if CHINESE_METADATA_RE.match(stripped):
+            flush()
+            continue
+
+        # Skip purely Chinese content
+        if _en_ratio(stripped) < 0.05:
+            flush()
+            continue
+
+        # Skip question-only lines (numbered comprehension questions)
+        if QUESTION_ONLY_LINE_RE.match(stripped):
+            flush()
+            continue
+
+        # Skip numbered question lines (e.g., "14. What the author tries to...")
+        if NUMBERED_QUESTION_RE.match(stripped):
+            flush()
+            continue
+
+        # Skip bullet-point option lines (e.g., "• promote cooperation...")
+        if BULLET_LINE_RE.match(stripped):
+            flush()
+            continue
+
+        # Skip answer-choice-only lines with [A] or A. patterns
         if CHOICE_LINE_RE.match(stripped):
+            flush()
+            continue
+
+        # Skip single option lines (A. text)
+        if OPTION_ONLY_LINE_RE.match(stripped):
             flush()
             continue
 
@@ -255,11 +376,6 @@ def _extract_sentences(text: str) -> list[str]:
             cleaned = _clean_content_paragraph(stripped)
             if cleaned:
                 paragraphs.append(cleaned)
-            continue
-
-        # Skip purely Chinese metadata
-        if _en_ratio(stripped) < 0.05:
-            flush()
             continue
 
         current.append(stripped)

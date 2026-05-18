@@ -14,8 +14,12 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 import os
 import io
+import re
 import csv
 import json
+
+from dotenv import load_dotenv
+load_dotenv()
 from pathlib import Path
 
 from src.backend.parser import parse_file, extract_english_sentences, extract_year_from_filename
@@ -27,6 +31,7 @@ from src.backend.analyzer import (
     classify_by_frequency,
 )
 from src.backend.dictionary import lookup_word, annotate_word_index
+from src.backend.translator import translator, _translate_task
 
 app = FastAPI(title="考研单词频率筛选 v2")
 
@@ -51,12 +56,38 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 _session_papers: list[dict] = []
 _session_word_index: dict = {}
 _session_settings = {
-    "high_threshold": 0.5,
-    "medium_threshold": 0.2,
+    "high_threshold": 0.3,
+    "medium_threshold": 0.1,
     "exclude_levels": ["primary", "zhongkao"],
     "exclude_groups": [],
     "use_momo_examples": False,  # toggle: 墨墨原版例句 vs 真题例句
+    "personal_vocab_enabled": False,  # toggle: 生词本模式
+    "section_filter": "all",
 }
+
+SECTION_FILTER_MAP = {
+    "all": None,
+    "cloze": ["use_of_english"],
+    "reading": ["reading_a", "reading_b"],
+    "translation": ["reading_c"],
+}
+
+_index_cache: dict = {}
+
+# ── Personal vocab ──
+_personal_vocab_words: set[str] = set()
+
+
+def _make_cache_key() -> tuple:
+    settings = _session_settings
+    return (
+        settings.get("section_filter", "all"),
+        tuple(sorted(settings.get("exclude_levels", []))),
+        tuple(sorted(settings.get("exclude_groups", []))),
+        tuple(sorted(
+            p["filename"] for p in _session_papers if p.get("enabled", True)
+        )),
+    )
 
 
 def _load_momo_groups() -> dict[str, set[str]]:
@@ -92,10 +123,10 @@ def _load_papers_from_disk() -> list[dict]:
     if not PAPERS_DIR.exists():
         return papers
 
-    for year_dir in sorted(PAPERS_DIR.iterdir()):
-        if not year_dir.is_dir():
+    for exam_dir in sorted(PAPERS_DIR.iterdir()):
+        if not exam_dir.is_dir():
             continue
-        meta_path = year_dir / "meta.json"
+        meta_path = exam_dir / "meta.json"
         if not meta_path.exists():
             continue
 
@@ -103,20 +134,37 @@ def _load_papers_from_disk() -> list[dict]:
             meta = json.load(f)
 
         year = meta['year']
+        exam_type = meta.get('type', '未知')
+        if exam_type == '未知' or not exam_type:
+            exam_type = '英语一'  # pre-2010: no 英语一/二 distinction
         for sec in meta['sections']:
-            section_file = year_dir / sec['file']
+            section_file = exam_dir / sec['file']
             if not section_file.exists():
                 continue
-            sentences = section_file.read_text(encoding='utf-8').strip().split('\n\n')
-            sentences = clean_exam_sentences([s.strip() for s in sentences if s.strip()])
+            
+            raw_text = section_file.read_text(encoding='utf-8').strip()
+            # Split by double newline, or fallback to single newline if no double exists
+            if '\n\n' in raw_text:
+                paragraphs = raw_text.split('\n\n')
+            else:
+                paragraphs = raw_text.split('\n')
+                
+            sentences = clean_exam_sentences([p.strip() for p in paragraphs if p.strip()])
 
-            papers.append({
+            paper_entry = {
                 'year': year,
                 'section': sec['key'],
                 'section_label': sec['label'],
-                'filename': f"{year}_{sec['key']}",  # synthetic filename
+                'exam_type': exam_type,
+                'filename': f"{year}_{sec['key']}",
                 'sentences': sentences,
-            })
+            }
+
+            options_path = exam_dir / sec['file'].replace('.txt', '_options.txt')
+            if options_path.exists():
+                paper_entry['option_words'] = options_path.read_text(encoding='utf-8').strip().split()
+
+            papers.append(paper_entry)
 
     return papers
 
@@ -160,12 +208,31 @@ def _get_exclude_words(levels: list[str]) -> set[str]:
 
 
 def _build_index() -> dict:
-    """Rebuild the full frequency index."""
-    global _session_papers, _session_settings
+    """Rebuild the full frequency index with section filter and cache."""
+    global _session_papers, _session_settings, _index_cache
+
+    cache_key = _make_cache_key()
+    if cache_key in _index_cache:
+        return _index_cache[cache_key]
 
     active_papers = [p for p in _session_papers if p.get('enabled', True)]
     if not active_papers:
         return {}
+
+    sf = _session_settings.get("section_filter", "all")
+    allowed = SECTION_FILTER_MAP.get(sf)
+    if allowed is not None:
+        active_papers = [p for p in active_papers if p['section'] in allowed]
+
+    if sf == "cloze":
+        merged = []
+        for p in active_papers:
+            options = p.get("option_words", [])
+            if options:
+                p = dict(p)
+                p["sentences"] = p["sentences"] + options
+            merged.append(p)
+        active_papers = merged
 
     word_index = analyzer.build_frequency_index(active_papers)
 
@@ -183,6 +250,8 @@ def _build_index() -> dict:
         word_index = apply_basic_word_filter(word_index, exclude)
 
     word_index = annotate_word_index(word_index)
+
+    _index_cache[cache_key] = word_index
     return word_index
 
 
@@ -195,7 +264,7 @@ def _get_top_example(info: dict, use_momo: bool = False) -> dict | None:
     if use_momo:
         examples = info.get('momo_examples', [])
         if examples:
-            return {'text': examples[0], 'word': '', 'year': '墨墨', 'section': '', 'section_label': '墨墨原版例句'}
+            return {'text': examples[0], 'word': '', 'year': '墨墨', 'section': '', 'section_label': '墨墨原版例句', 'exam_type': ''}
 
     senses = info.get('senses', [])
     if not senses:
@@ -206,7 +275,15 @@ def _get_top_example(info: dict, use_momo: bool = False) -> dict | None:
     if not sents:
         return None
     # Pick shortest sentence (more precise match)
-    return min(sents, key=lambda s: len(s['text']))
+    top = min(sents, key=lambda s: len(s['text']))
+    return {
+        'text': top.get('text', ''),
+        'word': top.get('word', ''),
+        'year': top.get('year', ''),
+        'section': top.get('section', ''),
+        'section_label': top.get('section_label', ''),
+        'exam_type': top.get('exam_type', ''),
+    }
 
 
 # ── Startup: load pre-split papers ──
@@ -218,6 +295,15 @@ async def startup():
         _session_papers = disk_papers
         _session_word_index = _build_index()
         print(f"✅ 从真题整理/ 加载了 {len(disk_papers)} 个 section 单元")
+
+    import threading
+    def warmup():
+        for sf in ["all", "cloze", "reading", "translation"]:
+            _session_settings["section_filter"] = sf
+            _build_index()
+        _session_settings["section_filter"] = "all"
+        _session_word_index = _build_index()
+    threading.Thread(target=warmup, daemon=True).start()
 
 
 # ── API Routes ──
@@ -274,6 +360,7 @@ async def upload_papers(files: list[UploadFile] = File(...)):
             if tmp_path.exists():
                 os.remove(tmp_path)
 
+    _index_cache.clear()
     _session_word_index = _build_index()
     return {"uploaded": len(files), "total_units": len(_session_papers)}
 
@@ -304,6 +391,7 @@ async def delete_paper(year: str):
     """Delete all sections for a given year."""
     global _session_papers, _session_word_index
     _session_papers = [p for p in _session_papers if p["year"] != year]
+    _index_cache.clear()
     _session_word_index = _build_index()
     return {"deleted": year, "total_units": len(_session_papers)}
 
@@ -452,18 +540,245 @@ async def get_settings():
 async def update_settings(settings: dict):
     """Update settings and rebuild index."""
     global _session_settings, _session_word_index
-    rebuild = False
 
-    for key in ["high_threshold", "medium_threshold", "exclude_levels", "exclude_groups", "use_momo_examples"]:
+    for key in ["high_threshold", "medium_threshold", "exclude_levels",
+                 "exclude_groups", "use_momo_examples", "personal_vocab_enabled",
+                 "section_filter"]:
         if key in settings:
             _session_settings[key] = settings[key]
-            if key in ["exclude_levels", "exclude_groups"]:
-                rebuild = True
 
-    if rebuild:
-        _session_word_index = _build_index()
-
+    _session_word_index = _build_index()
     return _session_settings
+
+
+# ── Personal Vocab ──
+
+def _normalize_personal_word(raw: str) -> str:
+    """Normalize a raw word from personal vocab into its lemma form."""
+    from src.backend.analyzer import lemmatize
+    w = raw.strip().lower()
+    if not w:
+        return ""
+    return lemmatize(w)
+
+
+@app.post("/api/personal_vocab/upload")
+async def upload_personal_vocab(file: UploadFile = File(...)):
+    """Upload a personal vocabulary file (.txt or .xlsx).
+
+    .txt: one word per line.
+    .xlsx: first sheet, reads all non-empty cells, filters to English words.
+
+    Words are lemmatized and stored in _personal_vocab_words.
+    Returns the parsed word count and preview.
+    """
+    global _personal_vocab_words
+
+    if not file.filename:
+        return {"error": "请选择文件"}
+
+    suffix = Path(file.filename).suffix.lower()
+
+    if suffix == '.txt':
+        content = (await file.read()).decode('utf-8', errors='ignore')
+        raw_words = [line.strip() for line in content.splitlines() if line.strip()]
+    elif suffix == '.xlsx':
+        import openpyxl
+        import io
+        body = await file.read()
+        wb = openpyxl.load_workbook(io.BytesIO(body))
+        ws = wb.active
+        raw_words = []
+        for row in ws.iter_rows(values_only=True):
+            for cell in row:
+                if cell and isinstance(cell, str):
+                    text = cell.strip()
+                    # Only keep cells that look like English words (Latin letters only)
+                    if re.match(r'^[A-Za-z]+$', text) and len(text) >= 2:
+                        raw_words.append(text)
+    else:
+        return {"error": "请上传 .txt 或 .xlsx 文件"}
+
+    lemmatized = []
+    for w in raw_words:
+        lemma = _normalize_personal_word(w)
+        if lemma and len(lemma) >= 2:
+            lemmatized.append(lemma)
+
+    _personal_vocab_words = set(lemmatized)
+    _session_settings["personal_vocab_enabled"] = True
+
+    return {
+        "raw_count": len(raw_words),
+        "unique_count": len(_personal_vocab_words),
+        "preview": sorted(list(_personal_vocab_words))[:30],
+    }
+
+
+@app.get("/api/personal_words")
+async def get_personal_words(
+    search: str = Query("", max_length=50),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=10, le=500),
+):
+    """Get personal vocab words matched against word index + definitions.
+
+    Each word returns: lemma, frequency in exams, definitions (释义),
+    best example sentence from 真题 and from 墨墨.
+    """
+    global _session_word_index, _personal_vocab_words, _session_settings
+
+    if not _personal_vocab_words:
+        return {"words": [], "total": 0, "page": page, "page_size": page_size}
+
+    results = []
+    for lemma in sorted(_personal_vocab_words):
+        info = _session_word_index.get(lemma, {})
+
+        # Definitions from 墨墨 vocab
+        senses = info.get("senses", [])
+        if not senses:
+            senses = []
+            from src.backend.analyzer import MOMO_VOCAB
+            momo = MOMO_VOCAB.get(lemma, {})
+            for s in momo.get("senses", []):
+                senses.append({"pos": s["pos"], "meaning": s["meaning"], "count": 0})
+
+        # Best example from exam papers (真题例句)
+        exam_example = None
+        top = _get_top_example(info, use_momo=False)
+        if top:
+            exam_example = {
+                "text": top.get("text", ""),
+                "year": top.get("year", ""),
+                "section_label": top.get("section_label", ""),
+                "exam_type": top.get("exam_type", ""),
+            }
+
+        # Example from 墨墨
+        momo_example = None
+        momo_examples = info.get("momo_examples", [])
+        if momo_examples:
+            momo_example = momo_examples[0]
+
+        freq = info.get("frequency", 0)
+        in_exam_papers = len(info.get("variants", [])) > 0 or any(
+            v for v in info.get("pos_counts", {}).values()
+        )
+
+        results.append({
+            "lemma": lemma,
+            "frequency": round(freq, 4),
+            "in_exam_papers": in_exam_papers,
+            "senses": senses,
+            "exam_example": exam_example,
+            "momo_example": momo_example,
+            "pos_counts": info.get("pos_counts", {}),
+        })
+
+    # Search filter
+    if search:
+        s = search.lower()
+        results = [r for r in results if s in r["lemma"]]
+
+    # Sort: words found in exams first, then by frequency desc
+    results.sort(key=lambda r: (r["in_exam_papers"], r["frequency"]), reverse=True)
+
+    total = len(results)
+    start = (page - 1) * page_size
+    end = start + page_size
+
+    return {
+        "words": results[start:end],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "vocab_size": len(_personal_vocab_words),
+        "matched_count": sum(1 for r in results if r["in_exam_papers"]),
+    }
+
+
+@app.delete("/api/personal_vocab")
+async def clear_personal_vocab():
+    """Clear the personal vocab list."""
+    global _personal_vocab_words
+    _personal_vocab_words = set()
+    _session_settings["personal_vocab_enabled"] = False
+    return {"cleared": True}
+
+
+# ── Translation ──
+
+@app.post("/api/translate/start")
+async def start_pre_translate():
+    """Start background pre-translation of all sentences in word_index."""
+    global _session_word_index, _translate_task
+
+    if _translate_task["running"]:
+        return {"error": "翻译任务已在运行中"}
+
+    items = translator.collect_items_to_translate(_session_word_index)
+    _translate_task.update({
+        "running": True,
+        "done": 0,
+        "total": len(items),
+        "status": "running",
+        "current": "",
+    })
+
+    def _run():
+        def progress(done, total, current):
+            _translate_task.update({
+                "done": done,
+                "total": total,
+                "current": current,
+            })
+        try:
+            translator.batch_translate(items, progress_callback=progress)
+            _translate_task["status"] = "done"
+        except Exception as e:
+            _translate_task["status"] = "error"
+            _translate_task["current"] = str(e)
+        finally:
+            _translate_task["running"] = False
+
+    import threading
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+
+    return {"started": True, "total": len(items)}
+
+
+@app.get("/api/translate/progress")
+async def get_translate_progress():
+    """Get pre-translation progress."""
+    return _translate_task
+
+
+@app.post("/api/translate/sentences")
+async def get_translations(items: list[dict]):
+    """Batch fetch translations for given (sentence, word) pairs.
+
+    Body: [{text: "The...", word: "propose", lemma: "propose"}]
+    Returns: {translations: {"text|word": {original, translation, highlight_start, highlight_end}}}
+    """
+    results = {}
+    for item in items:
+        try:
+            result = translator.translate(
+                item.get("text", ""),
+                item.get("word", item.get("lemma", "")),
+            )
+            key = f"{item.get('text', '')}|{item.get('word', item.get('lemma', ''))}"
+            results[key] = {
+                "original": result.original,
+                "translation": result.translation,
+                "highlight_start": result.highlight_start,
+                "highlight_end": result.highlight_end,
+            }
+        except Exception:
+            pass
+    return {"translations": results}
 
 
 # ── Export ──
@@ -502,10 +817,13 @@ async def export_csv(band: str = Query("all", regex="^(high|medium|low|all)$")):
         ])
 
     output.seek(0)
+    sf = _session_settings.get("section_filter", "all")
+    sf_label = {"all": "all", "cloze": "cloze", "reading": "reading",
+                "translation": "translation"}.get(sf, "all")
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=words_{band}.csv"},
+        headers={"Content-Disposition": f"attachment; filename=words_{sf_label}_{band}.csv"},
     )
 
 
@@ -578,10 +896,13 @@ async def export_excel(band: str = Query("all", regex="^(high|medium|low|all)$")
     wb.save(output)
     output.seek(0)
 
+    sf = _session_settings.get("section_filter", "all")
+    sf_label = {"all": "all", "cloze": "cloze", "reading": "reading",
+                "translation": "translation"}.get(sf, "all")
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename=words_{band}.xlsx"},
+        headers={"Content-Disposition": f"attachment; filename=words_{sf_label}_{band}.xlsx"},
     )
 
 

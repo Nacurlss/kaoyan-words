@@ -1,6 +1,7 @@
-import type { WordEntry, SenseDetail } from "../types";
-import { useState } from "react";
-import { getSenseDetail } from "../api";
+import type { WordEntry, SenseDetail, Translation } from "../types";
+import { useState, useEffect } from "react";
+import { getSenseDetail, fetchTranslations } from "../api";
+import TranslateLine from "./TranslateLine";
 
 interface Props {
   words: WordEntry[];
@@ -30,10 +31,26 @@ function freqClass(freq: number): string {
 
 function SenseDetailPopover({ lemma, pos, onClose }: { lemma: string; pos: string; onClose: () => void }) {
   const [detail, setDetail] = useState<{ unit_count: number; sentences: SenseDetail[] } | null>(null);
+  const [translations, setTranslations] = useState<Record<string, Translation>>({});
+  const [translating, setTranslating] = useState(false);
 
   useState(() => {
     getSenseDetail(lemma, pos).then(setDetail);
   });
+
+  useEffect(() => {
+    if (!detail || detail.sentences.length === 0) return;
+    setTranslating(true);
+    const items = detail.sentences.map((s) => ({
+      text: s.text,
+      word: s.word,
+      lemma: "",
+    }));
+    fetchTranslations(items).then((t) => {
+      setTranslations(t);
+      setTranslating(false);
+    });
+  }, [detail]);
 
   if (!detail) {
     return (
@@ -58,18 +75,25 @@ function SenseDetailPopover({ lemma, pos, onClose }: { lemma: string; pos: strin
           ) : (
             detail.sentences.slice(0, 50).map((s, i) => {
               const idx = s.text.toLowerCase().indexOf(s.word.toLowerCase());
+              const typeLabel = s.exam_type ? `${s.exam_type} · ` : "";
               return (
                 <div key={i} className="sentence-item">
-                  <div className="paper-label">{s.year} · {s.section_label}</div>
-                  {idx >= 0 ? (
-                    <>
-                      {s.text.slice(0, idx)}
-                      <span className="highlight">{s.text.slice(idx, idx + s.word.length)}</span>
-                      {s.text.slice(idx + s.word.length)}
-                    </>
-                  ) : (
-                    s.text
-                  )}
+                  <div className="paper-label">{typeLabel}{s.year} · {s.section_label}</div>
+                  <div>
+                    {idx >= 0 ? (
+                      <>
+                        {s.text.slice(0, idx)}
+                        <span className="highlight">{s.text.slice(idx, idx + s.word.length)}</span>
+                        {s.text.slice(idx + s.word.length)}
+                      </>
+                    ) : (
+                      s.text
+                    )}
+                  </div>
+                  <TranslateLine
+                    translation={translations[`${s.text}|${s.word}`] || null}
+                    loading={translating}
+                  />
                 </div>
               );
             })
@@ -143,11 +167,17 @@ export default function WordTable({ words, loading, total, page, pageSize, sortB
                   <td>
                     <div className="example-cell">
                       {w.top_example ? (
-                        <span title={`${w.top_example.year} · ${w.top_example.section_label}`}>
-                          {w.top_example.text.length > 70
-                            ? w.top_example.text.slice(0, 70) + "…"
-                            : w.top_example.text}
-                        </span>
+                        <>
+                          <div className="example-text">
+                            {w.top_example.text.length > 70
+                              ? w.top_example.text.slice(0, 70) + "…"
+                              : w.top_example.text}
+                          </div>
+                          <div className="example-source">
+                            {w.top_example.exam_type ? `${w.top_example.exam_type} · ` : ""}
+                            {w.top_example.year} · {w.top_example.section_label}
+                          </div>
+                        </>
                       ) : (
                         "—"
                       )}
