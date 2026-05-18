@@ -191,6 +191,20 @@ def _load_momo_vocab() -> dict[str, dict]:
 
 MOMO_VOCAB = _load_momo_vocab()
 
+_supplement_path = MOMO_PATH.parent / "momo_supplement.json"
+if _supplement_path.exists():
+    with open(_supplement_path, encoding='utf-8') as f:
+        supplement = json.load(f)
+    for e in supplement:
+        lemma = e['lemma'].lower()
+        if lemma not in MOMO_VOCAB:
+            senses = []
+            for s in e.get('senses', []):
+                sense = {'pos': s['pos'], 'meaning': _clean_momo_meaning(s['meaning'])}
+                if sense not in senses:
+                    senses.append(sense)
+            MOMO_VOCAB[lemma] = {'senses': senses, 'examples_en': []}
+
 
 def lemmatize(word: str) -> str:
     """Lemmatize using NLTK WordNet + irregular dictionary fallback."""
