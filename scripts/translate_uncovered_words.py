@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Translate uncovered vocabulary words using DeepSeek API.
+"""用 DeepSeek API 批量翻译未覆盖词汇 | Translate uncovered words via DeepSeek API.
 
 Input:  data/exports/uncovered_words_final.json
 Output: data/exports/uncovered_words_translated.json
 Cache:  data/processed/vocab_translations/
 
+按考研大纲风格翻译，标注词性，分批调用 API 并缓存结果。
 Usage: python scripts/translate_uncovered_words.py
 """
+
 
 import hashlib
 import json

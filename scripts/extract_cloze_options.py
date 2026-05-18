@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Extract cloze test option words from raw exam PDF/DOCX files.
+"""从原始试卷提取完形填空选项词 | Extract cloze test option words from raw exam files.
 
-Scans the full text (paragraphs + tables for DOCX) for lines matching:
-    1. [A] word1 [B] word2 [C] word3 [D] word4
-Extracts all option words and writes them to the corresponding _options.txt file.
+扫描全文（段落 + DOCX 表格），匹配 A/B/C/D 选项行，提取备选词，
+写入 data/processed/sections/*/01_完形填空_options.txt。
 
 Usage:
     python scripts/extract_cloze_options.py
 """
+
 
 import sys
 import re

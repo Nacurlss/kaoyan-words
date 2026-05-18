@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Regenerate momo_supplement.json with proper noun filtering + whitelist.
+"""过滤补充词表中的专有名词，保留实词 | Filter proper nouns from supplement, keep legitimate words.
 
-Reads from: data/processed/vocab_translations/ + data/exports/uncovered_words_final.json
-Filters out proper nouns using system dictionary + manual blacklist
-Keeps legitimate words via WHITELIST
+Input:  data/processed/vocab_translations/ + data/exports/uncovered_words_final.json
+Output: data/processed/momo_vocab/momo_supplement.json
 
+通过系统词典判断专有名词 + 手工黑名单，白名单保护误伤实词。
 Usage: python scripts/clean_supplement_names.py
 """
+
 
 import json
 from pathlib import Path

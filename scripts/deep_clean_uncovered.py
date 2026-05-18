@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-"""Smart filter: use macOS system dict + extra junk filters.
+"""深度清洗未覆盖词汇，去除人名地名碎片 | Deep clean uncovered words: remove names, places, fragments.
 
+Input:  data/exports/uncovered_words.json
 Output: data/exports/uncovered_words_final.json
+
+使用 macOS 系统词典 (/usr/share/dict/words) + 手工黑名单过滤，
+仅保留真正的英语实词。
 """
+
 
 import json
 from pathlib import Path

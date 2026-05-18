@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
-"""Find exam lemmas NOT in momo vocabulary + wordlists.
+"""检索墨墨词库未收录的真题词汇 | Find exam lemmas NOT in momo vocabulary + wordlists.
 
+Input:  后端 API (/api/words) 分页获取全部词形还原索引
 Output: data/exports/uncovered_words.json
+
+对比墨墨词库、四级/高考/中考/小学词表，找出真题中出现的未覆盖单词。
 """
+
 
 import json
 import urllib.request

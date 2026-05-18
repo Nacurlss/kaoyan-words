@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Merge DeepSeek translations into momo supplement vocab.
+"""合并 DeepSeek 翻译为墨墨补充词表 | Merge translations into momo_supplement.json.
 
-Reads uncovered_words_translated.json, converts to momo vocab format,
-writes momo_supplement.json.
+Input:  data/exports/uncovered_words_translated.json
+Output: data/processed/momo_vocab/momo_supplement.json
 
+将翻译结果转为墨墨词库格式，后端启动时自动加载。
 Usage: python scripts/merge_supplement_vocab.py
 """
 
