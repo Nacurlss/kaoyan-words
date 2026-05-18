@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Find exam lemmas NOT in momo vocabulary + wordlists.
 
 Output: data/exports/uncovered_words.json

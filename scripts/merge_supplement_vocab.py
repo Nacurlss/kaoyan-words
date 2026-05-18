@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Merge DeepSeek translations into momo supplement vocab.
 
 Reads uncovered_words_translated.json, converts to momo vocab format,

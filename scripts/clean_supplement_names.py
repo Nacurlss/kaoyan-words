@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Regenerate momo_supplement.json with proper noun filtering + whitelist.
 
 Reads from: data/processed/vocab_translations/ + data/exports/uncovered_words_final.json

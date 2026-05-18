@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Extract cloze test option words from raw exam PDF/DOCX files.
 
 Scans the full text (paragraphs + tables for DOCX) for lines matching:

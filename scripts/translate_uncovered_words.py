@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Translate uncovered vocabulary words using DeepSeek API.
 
 Input:  data/exports/uncovered_words_final.json

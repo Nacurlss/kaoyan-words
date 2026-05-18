@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Smart filter: use macOS system dict + extra junk filters.
 
 Output: data/exports/uncovered_words_final.json
